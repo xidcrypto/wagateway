@@ -354,3 +354,96 @@ export function searchMessages(
     `/api/sessions/${encodeURIComponent(sessionId)}/messages/history?${params.toString()}`,
   );
 }
+
+export type GroupSummary = {
+  id: string | null;
+  subject: string | null;
+  desc: string | null;
+  owner: string | null;
+  creation: number | null;
+  size: number;
+  restrict: boolean;
+  announce: boolean;
+  joinApprovalMode: boolean;
+  memberAddMode: boolean;
+  ephemeralDuration: number | null;
+  participants: Array<{ id: string | null; phoneNumber: string | null; admin: string | null }>;
+};
+
+export function listGroups(
+  sessionId: string,
+): Promise<{ groups: GroupSummary[]; total: number }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups`);
+}
+
+export function createGroup(
+  sessionId: string,
+  subject: string,
+  participants: string[],
+): Promise<{ group: GroupSummary }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups/create`, {
+    method: 'POST',
+    body: JSON.stringify({ subject, participants }),
+  });
+}
+
+export function getGroupMetadata(
+  sessionId: string,
+  jid: string,
+): Promise<{ group: GroupSummary }> {
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/groups/metadata?jid=${encodeURIComponent(jid)}`,
+  );
+}
+
+export function updateGroupMembers(
+  sessionId: string,
+  jid: string,
+  action: 'add' | 'remove' | 'promote' | 'demote',
+  participants: string[],
+): Promise<{ jid: string; action: string; results: Array<{ jid: string | null; status: string }> }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups/members`, {
+    method: 'POST',
+    body: JSON.stringify({ jid, action, participants }),
+  });
+}
+
+export function renameGroup(
+  sessionId: string,
+  jid: string,
+  subject: string,
+): Promise<{ updated: boolean; jid: string; subject: string }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups/name`, {
+    method: 'POST',
+    body: JSON.stringify({ jid, subject }),
+  });
+}
+
+export function getGroupInvite(
+  sessionId: string,
+  jid: string,
+): Promise<{ jid: string; code: string; link: string }> {
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/groups/invite?jid=${encodeURIComponent(jid)}`,
+  );
+}
+
+export function revokeGroupInvite(
+  sessionId: string,
+  jid: string,
+): Promise<{ jid: string; code: string; link: string }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups/revoke`, {
+    method: 'POST',
+    body: JSON.stringify({ jid }),
+  });
+}
+
+export function leaveGroup(
+  sessionId: string,
+  jid: string,
+): Promise<{ left: boolean; jid: string }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/groups/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ jid }),
+  });
+}

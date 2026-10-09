@@ -58,7 +58,7 @@ Dokumen ini adalah satu-satunya sumber instruksi untuk proyek **Pansa Gateway**.
 - [x] 5.3 Halaman sessions
 - [x] 5.4 Halaman chat
 - [x] 5.5 Halaman messages
-- [ ] 5.6 Halaman groups
+- [x] 5.6 Halaman groups
 - [ ] 5.7 Halaman contacts
 - [ ] 5.8 Halaman blast
 - [ ] 5.9 Halaman admin
@@ -105,6 +105,7 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 | 2026-10-09 | 5.3 | src/lib/client/api.ts (create/update/delete/status/qr/start/stop/pairing), src/app/(dashboard)/sessions/page.tsx | Halaman sessions: buat session, QR sebagai gambar, pairing code (input nomor + tampilkan kode + batalkan), polling status+QR 3 dtk berhenti saat open, ubah label, stop/logout-hapus via modal konfirmasi; tsc 0 + lint 0 error (perbaiki TS2367 + setState-dalam-effect) + build OK; deploy OK (/sessions 200); uji live penuh via API (buat→qr 7642 char→label→stop→start→hapus, list akhir tinggal utama); session+pesan uji dibersihkan |
 | 2026-10-09 | 5.4 | src/lib/client/api.ts (listConversations, getHistory, sendText), src/app/(dashboard)/chat/page.tsx | Halaman chat: pilih session + kontak (dari conversations), chat baru via nomor, riwayat bubble in/out + centang status, kirim teks, polling 3 dtk, peringatan bila session belum open, layout 2 kolom desktop + 1 kolom mobile; tsc 0 + lint 0 error (perbaiki setState-dalam-effect ×2 + prefer-const) + build OK; deploy OK (/chat 200); uji API (conversations 3 kontak blast 8, history benar, kirim teks 409 tepat saat logged_out) |
 | 2026-10-09 | 5.5 | src/lib/client/api.ts (searchMessages + MessageFilter), src/app/(dashboard)/messages/page.tsx | Halaman messages: filter session/kontak/arah/cari-teks + paginasi 20 per halaman, badge arah+status, tanggal id-ID; tsc 0 + lint 0 error (perbaiki setState-dalam-effect) + build OK; deploy OK (/messages 200); uji filter API (out=3, in=0, q=PANSA ketemu) |
+| 2026-10-09 | 5.6 | src/lib/client/api.ts (8 helper grup + tipe GroupSummary), src/app/(dashboard)/groups/page.tsx | Halaman groups: pilih session + daftar grup, buat grup (modal nama+peserta), detail (rename, anggota add/remove/promote/demote, invite link + revoke, leave via modal bahaya), banner bila belum open; tsc 0 + lint 0 error + build OK (○ /groups); deploy OK (/groups 200); uji API nyata (401 tanpa token; 404 session hilang; 8 endpoint list/create/metadata/members/name/invite/revoke/leave → 409 tepat saat belum open; 400 subject kosong/peserta kosong/JID ngawur, invite tidak hang); session uji dibersihkan (list akhir: session "jhody" milik user di status qr) |
 
 ### Catatan Keputusan Tambahan
 1. 2026-10-09 — Penyimpangan aturan global no. 2 (custom pairing code dihapus atas perintah user): `customCode`/`custom_code` + `pairingCodeSchema` dihapus dari `session-manager.requestPairing`, route `/pairing` + `/request-code`, dan `validators.ts`; `requestPairingCode(phone)` Baileys dipanggil tanpa argumen kode (kode 8 char selalu dari server WA). Field tak dikenal di body diabaikan zod (tidak error). Scan QR tetap tanpa nomor; pairing tetap wajib `{ phone }`.
