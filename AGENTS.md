@@ -60,7 +60,7 @@ Dokumen ini adalah satu-satunya sumber instruksi untuk proyek **Pansa Gateway**.
 - [x] 5.5 Halaman messages
 - [x] 5.6 Halaman groups
 - [x] 5.7 Halaman contacts
-- [ ] 5.8 Halaman blast
+- [x] 5.8 Halaman blast
 - [ ] 5.9 Halaman admin
 - [ ] 5.10 Halaman settings
 - [ ] 5.11 **Verifikasi Fase 5** (semua halaman memakai API nyata, nyaman di 360px, 401 selalu ke login)
@@ -107,6 +107,7 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 | 2026-10-09 | 5.5 | src/lib/client/api.ts (searchMessages + MessageFilter), src/app/(dashboard)/messages/page.tsx | Halaman messages: filter session/kontak/arah/cari-teks + paginasi 20 per halaman, badge arah+status, tanggal id-ID; tsc 0 + lint 0 error (perbaiki setState-dalam-effect) + build OK; deploy OK (/messages 200); uji filter API (out=3, in=0, q=PANSA ketemu) |
 | 2026-10-09 | 5.6 | src/lib/client/api.ts (8 helper grup + tipe GroupSummary), src/app/(dashboard)/groups/page.tsx | Halaman groups: pilih session + daftar grup, buat grup (modal nama+peserta), detail (rename, anggota add/remove/promote/demote, invite link + revoke, leave via modal bahaya), banner bila belum open; tsc 0 + lint 0 error + build OK (○ /groups); deploy OK (/groups 200); uji API nyata (401 tanpa token; 404 session hilang; 8 endpoint list/create/metadata/members/name/invite/revoke/leave → 409 tepat saat belum open; 400 subject kosong/peserta kosong/JID ngawur, invite tidak hang); session uji dibersihkan (list akhir: session "jhody" milik user di status qr) |
 | 2026-10-09 | 5.7 | src/lib/client/api.ts (checkNumber, getProfilePicture, getContactAbout, getBlocklist, blockContact, unblockContact), src/app/(dashboard)/contacts/page.tsx | Halaman contacts: pilih session + cek nomor (badge terdaftar/tidak + JID), lihat foto profil (next/image 160px) + about, blocklist + blokir/buka-blokir, banner bila belum open; tsc 0 + lint 0 error (perbaiki setState-dalam-effect) + build OK (○ /contacts); deploy OK (/contacts 200); uji API nyata di session user "jhody" (logged_out, tidak diganggu): 401 tanpa token, 404 session hilang, 409 check-number/foto/blocklist saat belum open, 400 nomor ngawur/field kosong; tanpa session uji baru |
+| 2026-10-09 | 5.8 | src/lib/client/api.ts (listBlasts, getBlastDetail, createBlast, blastAction + tipe BlastItem/Detail), src/app/(dashboard)/blast/page.tsx | Halaman blast: pilih session + daftar campaign, buat (modal label+template {{nama}}+penerima+delay), detail + progress bar + statistik pending/sent/failed + polling 3 dtk saat running, pause/resume/cancel (cancel via modal bahaya), banner bila belum open; tsc 0 + lint 0 error + build OK (○ /blast); deploy OK (/blast 200); uji API validasi di session "jhody" tanpa kirim beneran (401/404 benar, list 200 kosong, 400 recipients kosong/invalid/teks kosong/delay negatif, 400 id ngawur, 404 detail hilang) |
 
 ### Catatan Keputusan Tambahan
 1. 2026-10-09 — Penyimpangan aturan global no. 2 (custom pairing code dihapus atas perintah user): `customCode`/`custom_code` + `pairingCodeSchema` dihapus dari `session-manager.requestPairing`, route `/pairing` + `/request-code`, dan `validators.ts`; `requestPairingCode(phone)` Baileys dipanggil tanpa argumen kode (kode 8 char selalu dari server WA). Field tak dikenal di body diabaikan zod (tidak error). Scan QR tetap tanpa nomor; pairing tetap wajib `{ phone }`.

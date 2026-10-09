@@ -506,3 +506,54 @@ export function unblockContact(
     body: JSON.stringify({ number }),
   });
 }
+
+export type BlastItem = {
+  id: number;
+  label: string;
+  total: number;
+  delayMin: number;
+  delayMax: number;
+  status: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
+export type BlastDetail = BlastItem & {
+  sessionId: string;
+  textBody: string;
+  error: string | null;
+};
+
+export function listBlasts(
+  sessionId: string,
+): Promise<{ blasts: BlastItem[]; total: number }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts?limit=100`);
+}
+
+export function getBlastDetail(
+  sessionId: string,
+  blastId: number,
+): Promise<{ blast: BlastDetail; stats: { pending: number; sent: number; failed: number; total: number } }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts/${blastId}`);
+}
+
+export function createBlast(
+  sessionId: string,
+  body: { label: string; text: string; recipients: string; delayMin: number; delayMax: number },
+): Promise<{ blast: BlastItem; skipped: number }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function blastAction(
+  sessionId: string,
+  blastId: number,
+  action: 'pause' | 'resume' | 'cancel',
+): Promise<{ blast: BlastItem }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts/${blastId}/${action}`, {
+    method: 'POST',
+  });
+}
