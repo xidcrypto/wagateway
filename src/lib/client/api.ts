@@ -557,3 +557,65 @@ export function blastAction(
     method: 'POST',
   });
 }
+
+export type AdminUser = {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: 'admin' | 'user';
+  active: boolean;
+  createdAt: string;
+};
+
+export function listAdminUsers(): Promise<{ users: AdminUser[] }> {
+  return api('/api/admin/users');
+}
+
+export function createAdminUser(
+  body: { username: string; email: string; fullName: string; password: string; role?: 'admin' | 'user' },
+): Promise<{ user: AdminUser }> {
+  return api('/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchAdminUser(
+  id: number,
+  body: Partial<{ email: string; fullName: string; phone: string | null; role: 'admin' | 'user'; active: boolean; password: string }>,
+): Promise<{ user: AdminUser }> {
+  return api(`/api/admin/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminUser(id: number): Promise<{ deleted: boolean }> {
+  return api(`/api/admin/users/${id}`, { method: 'DELETE' });
+}
+
+export type AdminSession = {
+  id: string;
+  label: string;
+  status: string;
+  phone: string | null;
+  ownerId: number | null;
+  owner: { id: number; username: string; email: string } | null;
+  updatedAt: string;
+};
+
+export function listAdminSessions(): Promise<{ sessions: AdminSession[]; total: number }> {
+  return api('/api/admin/sessions?limit=100');
+}
+
+export function forceStopSession(
+  id: string,
+  logout = false,
+): Promise<{ stopped: boolean; deleted?: boolean; id?: string }> {
+  return api(`/api/admin/sessions/${encodeURIComponent(id)}/force-stop`, {
+    method: 'POST',
+    body: JSON.stringify({ logout }),
+  });
+}
