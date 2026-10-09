@@ -200,3 +200,90 @@ export async function countSessionMessages(
   );
   return data.total;
 }
+
+export type SessionDetail = SessionItem & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function createSession(label: string): Promise<{ session: SessionDetail }> {
+  return api<{ session: SessionDetail }>('/api/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function updateSessionLabel(
+  sessionId: string,
+  label: string,
+): Promise<{ session: SessionDetail }> {
+  return api<{ session: SessionDetail }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'PATCH', body: JSON.stringify({ label }) },
+  );
+}
+
+export function deleteSession(sessionId: string): Promise<{ deleted: boolean }> {
+  return api<{ deleted: boolean }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export type SessionStatus = {
+  id: string;
+  status: string;
+  phone: string | null;
+  waName: string | null;
+  hasQr: boolean;
+  hasPairing: boolean;
+  live: boolean;
+};
+
+export function getSessionStatus(sessionId: string): Promise<SessionStatus> {
+  return api<SessionStatus>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/status`,
+  );
+}
+
+export function getSessionQr(sessionId: string): Promise<{ qr: string | null }> {
+  return api<{ qr: string | null }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/qr`,
+  );
+}
+
+export function startSession(
+  sessionId: string,
+): Promise<{ session?: SessionDetail; stopped?: boolean }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/start`, {
+    method: 'POST',
+  });
+}
+
+export function stopSession(
+  sessionId: string,
+  logout: boolean,
+): Promise<{ stopped: boolean; deleted?: boolean; session?: SessionDetail }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/stop`, {
+    method: 'POST',
+    body: JSON.stringify({ logout }),
+  });
+}
+
+export function requestPairingCode(
+  sessionId: string,
+  phone: string,
+): Promise<{ pairing: { code: string; phone: string; expiresIn: number } }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/pairing`, {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export function cancelPairingCode(
+  sessionId: string,
+): Promise<{ cancelled: boolean }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/pairing`, {
+    method: 'DELETE',
+  });
+}
