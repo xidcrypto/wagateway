@@ -156,6 +156,63 @@ export function getMe(): Promise<MeResult> {
   return api<MeResult>('/api/me');
 }
 
+export type SiteInfo = {
+  siteName: string;
+  siteTagline: string;
+};
+
+const DEFAULT_SITE_INFO: SiteInfo = {
+  siteName: 'Pansa Gateway',
+  siteTagline: '',
+};
+
+let siteInfoCache: SiteInfo | null = null;
+
+/** Info branding publik (tanpa login). Hasil di-cache per sesi browser. */
+export async function getSiteInfo(): Promise<SiteInfo> {
+  if (siteInfoCache) return siteInfoCache;
+  try {
+    const data = await api<SiteInfo>('/api/site-info');
+    siteInfoCache = {
+      siteName: data.siteName?.trim() || DEFAULT_SITE_INFO.siteName,
+      siteTagline: data.siteTagline ?? '',
+    };
+  } catch {
+    siteInfoCache = { ...DEFAULT_SITE_INFO };
+  }
+  return siteInfoCache;
+}
+
+export function clearSiteInfoCache(): void {
+  siteInfoCache = null;
+}
+
+export type AdminSettings = Record<string, string>;
+
+export function getAdminSettings(): Promise<{ settings: AdminSettings; smtpConfigured: boolean }> {
+  return api<{ settings: AdminSettings; smtpConfigured: boolean }>('/api/admin/settings');
+}
+
+export function updateAdminSettings(
+  body: Partial<{
+    site_name: string;
+    site_tagline: string;
+    registration_enabled: boolean;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_secure: boolean;
+    smtp_user: string;
+    smtp_pass: string;
+    mail_from: string;
+    mail_from_name: string;
+  }>,
+): Promise<{ updated: string[]; settings: AdminSettings; smtpConfigured: boolean }> {
+  return api('/api/admin/settings', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
 export type SessionItem = {
   id: string;
   label: string;
@@ -176,6 +233,46 @@ export type AdminStats = {
 
 export function getAdminStats(): Promise<AdminStats> {
   return api<AdminStats>('/api/admin/stats');
+}
+
+export type StatsDaily = {
+  date: string;
+  in: number;
+  out: number;
+  total: number;
+};
+
+export type StatsRecent = {
+  id: string;
+  sessionId: string;
+  direction: 'in' | 'out';
+  remoteJid: string;
+  msgType: string;
+  textBody: string | null;
+  status: string | null;
+  createdAt: string;
+  session: { id: string; label: string } | null;
+};
+
+export type StatsSession = {
+  id: string;
+  label: string;
+  status: string;
+  phone: string | null;
+  waName: string | null;
+};
+
+export type StatsResponse = {
+  sessions: { total: number; open: number };
+  messages: { total: number; in: number; out: number; today: number };
+  daily: StatsDaily[];
+  recent: StatsRecent[];
+  sessionsList: StatsSession[];
+};
+
+/** Statistik dashboard user sendiri (admin: agregat semua). */
+export function getStats(): Promise<StatsResponse> {
+  return api<StatsResponse>('/api/stats');
 }
 
 export type HistoryMessage = {

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import nodemailer from 'nodemailer';
-import { getSetting } from './settings';
+import { getSetting, getSiteInfo } from './settings';
 
 export type SmtpConfig = {
   host: string;
@@ -25,6 +25,7 @@ export async function getSmtpConfig(): Promise<SmtpConfig> {
   ]);
   const port = Number.parseInt(portRaw, 10);
   const secure = secureRaw.trim().toLowerCase() === 'true' || port === 465;
+  const { siteName } = await getSiteInfo();
   return {
     host: host.trim(),
     port: Number.isFinite(port) && port > 0 ? port : 587,
@@ -32,7 +33,7 @@ export async function getSmtpConfig(): Promise<SmtpConfig> {
     user: user.trim(),
     pass,
     from: from.trim(),
-    fromName: fromName.trim() || 'Pansa Gateway',
+    fromName: fromName.trim() || siteName,
   };
 }
 
@@ -100,12 +101,13 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function resetCodeMail(code: string): { text: string; html: string } {
+export async function resetCodeMail(code: string): Promise<{ text: string; html: string }> {
+  const { siteName } = await getSiteInfo();
   const text =
-    `Kode reset password Pansa Gateway Anda:\n\n${code}\n\n` +
+    `Kode reset password ${siteName} Anda:\n\n${code}\n\n` +
     `Kode berlaku 15 menit. Abaikan email ini bila Anda tidak memintanya.`;
   const html =
-    `<p>Kode reset password Pansa Gateway Anda:</p>` +
+    `<p>Kode reset password ${escapeHtml(siteName)} Anda:</p>` +
     `<p style="font-size:28px;font-weight:bold;letter-spacing:6px;">${escapeHtml(code)}</p>` +
     `<p>Kode berlaku 15 menit. Abaikan email ini bila Anda tidak memintanya.</p>`;
   return { text, html };

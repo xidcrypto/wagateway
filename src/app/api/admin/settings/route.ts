@@ -18,6 +18,8 @@ const SECRET_KEYS = new Set(['smtp_pass']);
 
 const settingsSchema = z
   .object({
+    site_name: z.string().max(64).optional(),
+    site_tagline: z.string().max(255).optional(),
     registration_enabled: z.union([z.boolean(), z.string()]).optional(),
     smtp_host: z.string().max(255).optional(),
     smtp_port: z.union([z.number(), z.string()]).optional(),
@@ -75,6 +77,12 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
     }
   }
 
+  // Nama web wajib tidak kosong bila disertakan.
+  const siteNameRaw = parsed.data.site_name;
+  if (siteNameRaw !== undefined && siteNameRaw.trim() === '') {
+    return fail('site_name: Nama web wajib diisi.', 400);
+  }
+
   const updated: string[] = [];
   try {
     for (const key of SETTING_KEYS) {
@@ -82,7 +90,13 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
       const value = normalizeValue(key, raw);
       if (value === null) continue; // tidak disertakan
       if (SECRET_KEYS.has(key) && value === '') continue; // secret kosong = jangan ubah
-      await setSetting(key, key === 'mail_from' || key === 'smtp_host' || key === 'smtp_user' ? value.trim() : value);
+      const v =
+        key === 'mail_from' || key === 'smtp_host' || key === 'smtp_user'
+          ? value.trim()
+          : key === 'site_name' || key === 'site_tagline' || key === 'mail_from_name'
+            ? value.trim()
+            : value;
+      await setSetting(key, v);
       updated.push(key);
     }
   } catch (err) {

@@ -4,6 +4,7 @@ import { requireAdmin, withAuth } from '@/lib/server/auth';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
 import { parseJsonBody } from '@/lib/server/validators';
 import { sendMail } from '@/lib/server/mailer';
+import { getSiteInfo } from '@/lib/server/settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,11 +22,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   if (!parsed.ok) return parsed.response;
 
   try {
+    const { siteName } = await getSiteInfo();
     await sendMail({
       to: parsed.data.to,
-      subject: 'Tes SMTP Pansa Gateway',
-      text: 'Ini email tes dari Pansa Gateway. Konfigurasi SMTP berfungsi.',
-      html: '<p>Ini email tes dari Pansa Gateway. Konfigurasi SMTP berfungsi.</p>',
+      subject: `Tes SMTP ${siteName}`,
+      text: `Ini email tes dari ${siteName}. Konfigurasi SMTP berfungsi.`,
+      html: `<p>Ini email tes dari ${siteName}. Konfigurasi SMTP berfungsi.</p>`,
     });
   } catch (err) {
     return fail(`Gagal mengirim email tes: ${err instanceof Error ? err.message : 'kesalahan tak dikenal'}`, 503);

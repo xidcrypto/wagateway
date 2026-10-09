@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { ApiError, api, clearToken, getToken } from '@/lib/client/api';
+import { ApiError, api, clearToken, getSiteInfo, getToken } from '@/lib/client/api';
 import { ToastHost } from '@/components/ui/Toast';
 
 type NavItem = { href: string; label: string; icon: ReactNode; adminOnly?: boolean };
@@ -43,11 +43,13 @@ type MeUser = {
 function SidebarBody({
   pathname,
   user,
+  siteName,
   onNavigate,
   onLogout,
 }: {
   pathname: string;
   user: MeUser | null;
+  siteName: string;
   onNavigate: () => void;
   onLogout: () => void;
 }) {
@@ -59,7 +61,7 @@ function SidebarBody({
         onClick={onNavigate}
         className="px-4 pb-4 pt-5 text-lg font-bold text-zinc-50"
       >
-        Pansa Gateway
+        {siteName}
       </Link>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
         {items.map((n) => {
@@ -104,6 +106,19 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MeUser | null>(null);
   const [ready, setReady] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [siteName, setSiteName] = useState('Pansa Gateway');
+
+  useEffect(() => {
+    let cancelled = false;
+    getSiteInfo()
+      .then((info) => {
+        if (!cancelled) setSiteName(info.siteName);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
@@ -160,6 +175,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           <SidebarBody
             pathname={pathname}
             user={user}
+            siteName={siteName}
             onNavigate={() => {}}
             onLogout={handleLogout}
           />
@@ -184,6 +200,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               <SidebarBody
                 pathname={pathname}
                 user={user}
+                siteName={siteName}
                 onNavigate={() => setDrawer(false)}
                 onLogout={handleLogout}
               />
@@ -202,7 +219,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             >
               <Menu size={20} />
             </button>
-            <span className="font-bold">Pansa Gateway</span>
+            <span className="font-bold">{siteName}</span>
           </header>
           <main className="mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
         </div>

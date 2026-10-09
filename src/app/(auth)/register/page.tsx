@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
-import { ApiError, register, setToken } from '@/lib/client/api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ApiError, getSiteInfo, register, setToken } from '@/lib/client/api';
 
 const inputClass =
   'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-zinc-50 outline-none focus:border-emerald-500';
@@ -18,6 +18,19 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [siteName, setSiteName] = useState('Pansa Gateway');
+
+  useEffect(() => {
+    let cancelled = false;
+    getSiteInfo()
+      .then((info) => {
+        if (!cancelled) setSiteName(info.siteName);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -53,7 +66,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
         <h1 className="text-center text-2xl font-bold text-zinc-50">Daftar Akun</h1>
         <p className="mt-1 text-center text-sm text-zinc-400">
-          Buat akun Pansa Gateway baru
+          Buat akun {siteName} baru
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">

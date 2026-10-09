@@ -5,6 +5,7 @@ import { prisma } from '@/lib/server/prisma';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
 import { emailSchema, parseJsonBody } from '@/lib/server/validators';
 import { getSmtpConfig, isSmtpConfigured, resetCodeMail, sendMail } from '@/lib/server/mailer';
+import { getSiteInfo } from '@/lib/server/settings';
 import { rateLimitFromEnv, withRateLimit } from '@/lib/server/rate-limit';
 
 export const runtime = 'nodejs';
@@ -71,10 +72,11 @@ async function handleForgot(req: NextRequest): Promise<Response> {
   });
 
   try {
-    const body = resetCodeMail(code);
+    const body = await resetCodeMail(code);
+    const { siteName } = await getSiteInfo();
     await sendMail({
       to: user.email,
-      subject: 'Kode reset password Pansa Gateway',
+      subject: `Kode reset password ${siteName}`,
       text: body.text,
       html: body.html,
     });

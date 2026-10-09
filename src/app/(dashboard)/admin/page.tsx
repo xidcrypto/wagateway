@@ -10,14 +10,17 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { toast } from '@/components/ui/Toast';
 import {
   ApiError,
+  clearSiteInfoCache,
   createAdminUser,
   deleteAdminUser,
   forceStopSession,
+  getAdminSettings,
   getAdminStats,
   getMe,
   listAdminSessions,
   listAdminUsers,
   patchAdminUser,
+  updateAdminSettings,
   type AdminSession,
   type AdminStats,
   type AdminUser,
@@ -43,27 +46,38 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [busy, setBusy] = useState(false);
+  const [siteName, setSiteName] = useState('');
+  const [siteTagline, setSiteTagline] = useState('');
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [savingSite, setSavingSite] = useState(false);
 
   async function refreshAll(): Promise<void> {
-    const [s, u, ss] = await Promise.all([
+    const [s, u, ss, st] = await Promise.all([
       getAdminStats(),
       listAdminUsers(),
       listAdminSessions(),
+      getAdminSettings(),
     ]);
     setStats(s);
     setUsers(u.users);
     setSessions(ss.sessions);
+    setSiteName(st.settings.site_name ?? '');
+    setSiteTagline(st.settings.site_tagline ?? '');
+    setSmtpConfigured(st.smtpConfigured);
   }
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getMe(), getAdminStats(), listAdminUsers(), listAdminSessions()])
-      .then(([me, s, u, ss]) => {
+    Promise.all([getMe(), getAdminStats(), listAdminUsers(), listAdminSessions(), getAdminSettings()])
+      .then(([me, s, u, ss, st]) => {
         if (!cancelled) {
           setMeId(me.user.id);
           setStats(s);
           setUsers(u.users);
           setSessions(ss.sessions);
+          setSiteName(st.settings.site_name ?? '');
+          setSiteTagline(st.settings.site_tagline ?? '');
+          setSmtpConfigured(st.smtpConfigured);
         }
       })
       .catch((e) => {
@@ -170,6 +184,29 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSaveSite(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    if (!siteName.trim()) {
+      toast('error', 'Nama web wajib diisi.');
+      return;
+    }
+    setSavingSite(true);
+    try {
+      const r = await updateAdminSettings({
+        site_name: siteName.trim(),
+        site_tagline: siteTagline.trim(),
+      });
+      setSiteName(r.settings.site_name ?? siteName.trim());
+      setSiteTagline(r.settings.site_tagline ?? '');
+      clearSiteInfoCache();
+      toast('success', 'Pengaturan web disimpan.');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal menyimpan pengaturan web.'));
+    } finally {
+      setSavingSite(false);
+    }
+  }
+
   if (loading) return <p className="text-zinc-400">Memuat…</p>;
 
   return (
@@ -210,6 +247,35 @@ export default function AdminPage() {
           </Card>
         </div>
       ) : null}
+
+      <Card title="Pengaturan web">
+        <form onSubmit={(e) => void handleSaveSite(e)} className="flex flex-col gap-3">
+          <TextInput
+            label="Nama web"
+            value={siteName}
+            onChange={(e) => setSiteName(e.target.value)}
+            maxLength={64}
+            required
+            placeholder="Pansa Gateway"
+          />
+          <TextInput
+            label="Tagline (tampil di login & judul browser)"
+            value={siteTagline}
+            onChange={(e) => setSiteTagline(e.target.value)}
+            maxLength={255}
+            placeholder="Gateway WhatsApp multi-user"
+          />
+          <p className="text-xs text-zinc-500">
+            Nama web tampil di sidebar, halaman login, judul browser, dan email reset password.
+            {smtpConfigured ? '' : ' SMTP belum dikonfigurasi — email reset password belum bisa dikirim.'}
+          </p>
+          <div>
+            <Button type="submit" disabled={savingSite}>
+              {savingSite ? 'Menyimpan…' : 'Simpan pengaturan web'}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       <Card title={`User (${users.length})`}>
         <ul className="flex flex-col gap-1">

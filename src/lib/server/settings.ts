@@ -8,6 +8,8 @@ import { prisma } from './prisma';
  */
 
 export const SETTING_KEYS = [
+  'site_name',
+  'site_tagline',
   'registration_enabled',
   'smtp_host',
   'smtp_port',
@@ -21,7 +23,9 @@ export const SETTING_KEYS = [
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 const ENV_FALLBACK: Record<SettingKey, string> = {
-  registration_enabled: 'SMTP_REGISTRATION_ENABLED',
+  site_name: 'SITE_NAME',
+  site_tagline: 'SITE_TAGLINE',
+  registration_enabled: 'REGISTRATION_ENABLED',
   smtp_host: 'SMTP_HOST',
   smtp_port: 'SMTP_PORT',
   smtp_secure: 'SMTP_SECURE',
@@ -32,6 +36,8 @@ const ENV_FALLBACK: Record<SettingKey, string> = {
 };
 
 const DEFAULTS: Record<SettingKey, string> = {
+  site_name: 'Pansa Gateway',
+  site_tagline: 'Gateway WhatsApp multi-user — kelola session, chat, grup, dan blast.',
   registration_enabled: 'true',
   smtp_host: '',
   smtp_port: '587',
@@ -39,7 +45,7 @@ const DEFAULTS: Record<SettingKey, string> = {
   smtp_user: '',
   smtp_pass: '',
   mail_from: '',
-  mail_from_name: 'Pansa Gateway',
+  mail_from_name: '',
 };
 
 export async function getSetting(key: SettingKey): Promise<string> {
@@ -70,6 +76,21 @@ export async function getAllSettings(): Promise<Record<string, string>> {
 export async function isRegistrationEnabled(): Promise<boolean> {
   const raw = (await getSetting('registration_enabled')).trim().toLowerCase();
   return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
+}
+
+export type SiteInfo = {
+  siteName: string;
+  siteTagline: string;
+};
+
+/** Nama + tagline web untuk branding dinamis (dipakai layout, email, endpoint publik). */
+export async function getSiteInfo(): Promise<SiteInfo> {
+  const [siteNameRaw, siteTaglineRaw] = await Promise.all([
+    getSetting('site_name'),
+    getSetting('site_tagline'),
+  ]);
+  const siteName = siteNameRaw.trim() || DEFAULTS.site_name;
+  return { siteName, siteTagline: siteTaglineRaw.trim() };
 }
 
 export async function setSetting(key: SettingKey, value: string): Promise<void> {

@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
-import { ApiError, login, setToken } from '@/lib/client/api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ApiError, getSiteInfo, login, setToken } from '@/lib/client/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +11,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [siteName, setSiteName] = useState('Pansa Gateway');
+  const [siteTagline, setSiteTagline] = useState('Masuk untuk mengelola WhatsApp gateway');
+
+  useEffect(() => {
+    let cancelled = false;
+    getSiteInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setSiteName(info.siteName);
+          if (info.siteTagline) setSiteTagline(info.siteTagline);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -34,9 +51,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-        <h1 className="text-center text-2xl font-bold text-zinc-50">Pansa Gateway</h1>
+        <h1 className="text-center text-2xl font-bold text-zinc-50">{siteName}</h1>
         <p className="mt-1 text-center text-sm text-zinc-400">
-          Masuk untuk mengelola WhatsApp gateway
+          {siteTagline}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
