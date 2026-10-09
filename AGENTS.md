@@ -54,7 +54,7 @@ Dokumen ini adalah satu-satunya sumber instruksi untuk proyek **Pansa Gateway**.
 
 ### Fase 5: Frontend
 - [x] 5.1 Layout dashboard (sidebar/drawer), auth guard, komponen reusable, tema gelap
-- [ ] 5.2 Halaman dashboard
+- [x] 5.2 Halaman dashboard
 - [ ] 5.3 Halaman sessions
 - [ ] 5.4 Halaman chat
 - [ ] 5.5 Halaman messages
@@ -101,6 +101,7 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 | 2026-10-09 | 4.3 | src/lib/server/blast-actions.ts, src/app/api/sessions/[id]/blasts/route.ts (+[blastId]/pause/resume/cancel) | Route blast: buat (transaksi blast+createMany batch 1000, langsung running+kick, buttons maks 10, delay default 1000/3000) + list (paginasi) + detail (stats pending/sent/failed) + pause/resume/cancel (guard 409 per status); user biasa hanya miliknya; live (buat 2 penerima done + template ter-render delivered, pause tahan progres→resume done 3/3, cancel simpan progres 1/2, guard 401/403/400/404/409 benar); tsc 0 + lint 0 error + build OK; blast+pesan+user uji dibersihkan (0 sisa) |
 | 2026-10-09 | sesi-baru | public/scan.html, (DELETE /api/sessions/0fb1c4d0..., POST /api/sessions label=utama) | Atas perintah user: session lama 0fb1c4d0 (qr, blast 7 paused 50/100) dihapus via DELETE (= stop logout true + hapus pesan + hapus folder kredensial + cascade blast/recipients); session baru 5ed8793d label "utama" dibuat + discan nomor baru → open 6283129635860; blasts session baru kosong (0), blast 7 lama 404 ikut terhapus, folder data/sessions hanya berisi session baru; scan.html diberi pesan diagnostik (belum login / 401 token / 404-403 session hilang) agar QR kosong bisa didiagnosis |
 | 2026-10-09 | 5.1 | src/app/layout.tsx, src/app/globals.css, src/app/(dashboard)/layout.tsx, src/components/layout/DashboardShell.tsx, src/components/ui/{Button,Card,Fields,Toast,Modal,StatusBadge}.tsx | Infrastruktur dashboard: root layout id + tema gelap tetap (dark, zinc-950), sidebar desktop 240px + drawer mobile + topbar, auth guard (/api/me, 401→/login, /admin khusus admin), 9 item nav, Toast host global, komponen reusable terpusat; tsc 0 + lint 0 error + build OK; deploy PM2 restart OK (health ok, logged_out dilewati restore, blast 8 done utuh); /login+/dashboard 200, halaman isi 5.2–5.10 masih 404 sesuai rencana |
+| 2026-10-09 | 5.2 | src/lib/client/api.ts (getAdminStats, countSessionMessages), src/app/(dashboard)/dashboard/page.tsx | Halaman dashboard: kartu statistik (admin: session/total-open + pesan in/out/hari ini + pengguna dari /api/admin/stats; user biasa: session miliknya + agregat in/out via history limit=1 per session) + daftar session + link ke /sessions; tsc 0 + lint 0 error + build OK; deploy OK (/login+/dashboard 200, kartu cocok angka API: 1 user, 1 session logged_out, 3 out hari ini dari blast 8) |
 
 ### Catatan Keputusan Tambahan
 1. 2026-10-09 — Penyimpangan aturan global no. 2 (custom pairing code dihapus atas perintah user): `customCode`/`custom_code` + `pairingCodeSchema` dihapus dari `session-manager.requestPairing`, route `/pairing` + `/request-code`, dan `validators.ts`; `requestPairingCode(phone)` Baileys dipanggil tanpa argumen kode (kode 8 char selalu dari server WA). Field tak dikenal di body diabaikan zod (tidak error). Scan QR tetap tanpa nomor; pairing tetap wajib `{ phone }`.

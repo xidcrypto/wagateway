@@ -167,3 +167,36 @@ export type SessionItem = {
 export function listSessions(): Promise<{ sessions: SessionItem[] }> {
   return api<{ sessions: SessionItem[] }>('/api/sessions');
 }
+
+export type AdminStats = {
+  users: { total: number; admins: number; regular: number };
+  sessions: { total: number; open: number };
+  messages: { total: number; in: number; out: number; today: number };
+};
+
+export function getAdminStats(): Promise<AdminStats> {
+  return api<AdminStats>('/api/admin/stats');
+}
+
+export type HistoryMessage = {
+  id: string;
+  direction: 'in' | 'out';
+  waId: string | null;
+  remoteJid: string;
+  msgType: string;
+  textBody: string | null;
+  status: string | null;
+  createdAt: string;
+};
+
+/** Total pesan per session (limit=1, ambil `total` saja). */
+export async function countSessionMessages(
+  sessionId: string,
+  direction?: 'in' | 'out',
+): Promise<number> {
+  const q = direction ? `?direction=${direction}&limit=1` : '?limit=1';
+  const data = await api<{ messages: HistoryMessage[]; total: number }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages/history${q}`,
+  );
+  return data.total;
+}
