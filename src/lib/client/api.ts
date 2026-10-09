@@ -619,3 +619,43 @@ export function forceStopSession(
     body: JSON.stringify({ logout }),
   });
 }
+
+export type MeUser = {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  role: 'admin' | 'user';
+  active: boolean;
+  webhookUrl: string | null;
+};
+
+export function patchMe(
+  body: Partial<{ fullName: string; email: string; phone: string | null; avatarUrl: string | null }>,
+): Promise<{ user: MeUser }> {
+  return api('/api/me', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function changePassword(
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ changed: boolean }> {
+  return api('/api/me/password', {
+    method: 'PUT',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+}
+
+export function updateWebhook(
+  body: { url?: string | null; secret?: string | null },
+): Promise<{ webhookUrl: string | null; hasSecret: boolean }> {
+  return api('/api/me/webhook', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
