@@ -58,4 +58,18 @@ export async function register(): Promise<void> {
       err instanceof Error ? err.message : err,
     );
   }
+
+  // Resume blast running (Fase 4.2): lanjutkan dari recipient pending.
+  try {
+    const { resumeRunningBlasts } = await import('./src/lib/server/blast-worker');
+    const { resumed } = await resumeRunningBlasts();
+    if (resumed > 0) {
+      console.log(`[pansa] resume blast: ${resumed} campaign dilanjutkan.`);
+    }
+  } catch (err) {
+    console.warn(
+      '[pansa] resume blast dilewati:',
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
