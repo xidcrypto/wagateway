@@ -20,6 +20,7 @@
   <h2>Scan QR WhatsApp</h2>
   <p style="font-size:13px;color:#a1a1aa">Halaman sementara untuk verifikasi 1.8 — QR refresh tiap 5 detik</p>
   <img id="qr" alt="QR WhatsApp">
+  <p id="msg" class="warn" style="display:none"></p>
   <p>Status: <span class="status" id="st">…</span></p>
   <div class="ok" id="done" style="display:none">✅ Status OPEN! Kabari asisten untuk lanjut restart-restore.</div>
   <p class="warn">Login dulu di <a href="/login" style="color:#6ee7b7">/login</a> bila QR tidak muncul.</p>
@@ -34,15 +35,22 @@
   const token = localStorage.getItem('pansa_token');
   const img = document.getElementById('qr');
   const st = document.getElementById('st');
+  const msg = document.getElementById('msg');
   const done = document.getElementById('done');
+  function showMsg(t) { msg.style.display = 'block'; msg.innerHTML = t; }
   if (!sid) { st.textContent = 'sid kosong — tambahkan ?sid=... di URL'; }
+  if (!token) { showMsg('⚠️ Belum login. Buka <a href="/login" style="color:#6ee7b7">/login</a> dulu di tab ini, lalu refresh halaman ini.'); }
   async function refresh() {
     if (!sid || !token) return;
     try {
-      const q = await (await fetch('/api/sessions/' + sid + '/qr', {
+      const qrRes = await fetch('/api/sessions/' + sid + '/qr', {
         headers: { Authorization: 'Bearer ' + token }
-      })).json();
+      });
+      if (qrRes.status === 401) { showMsg('⚠️ Token kedaluwarsa. Login ulang di <a href="/login" style="color:#6ee7b7">/login</a> lalu refresh.'); return; }
+      if (qrRes.status === 404 || qrRes.status === 403) { showMsg('⚠️ Session tidak ditemukan (HTTP ' + qrRes.status + '). Session lama mungkin sudah dihapus — minta ID session baru ke asisten.'); return; }
+      const q = await qrRes.json();
       if (q.success && q.data.qr) {
+        msg.style.display = 'none';
         // Ganti src hanya bila QR berubah (hindari flicker tiap poll).
         if (img.dataset.hash !== String(q.data.qr.length) + q.data.qr.slice(-32)) {
           img.src = q.data.qr;
