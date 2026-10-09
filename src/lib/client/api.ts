@@ -447,3 +447,62 @@ export function leaveGroup(
     body: JSON.stringify({ jid }),
   });
 }
+
+export type CheckNumberResult = {
+  jid: string | null;
+  exists: boolean;
+  lid: string | null;
+};
+
+export function checkNumber(
+  sessionId: string,
+  number: string,
+): Promise<{ results: CheckNumberResult[] }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/check-number`, {
+    method: 'POST',
+    body: JSON.stringify({ number }),
+  });
+}
+
+export function getProfilePicture(
+  sessionId: string,
+  number?: string,
+): Promise<{ jid: string; url: string | null }> {
+  const q = number ? `?number=${encodeURIComponent(number)}` : '';
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/profile-picture${q}`);
+}
+
+export function getContactAbout(
+  sessionId: string,
+  number: string,
+): Promise<{ about: { jid: string | null; status: string | null; setAt: number | null } }> {
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/about?number=${encodeURIComponent(number)}`,
+  );
+}
+
+export function getBlocklist(
+  sessionId: string,
+): Promise<{ blocklist: string[]; total: number }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/blocklist`);
+}
+
+export function blockContact(
+  sessionId: string,
+  number: string,
+): Promise<{ jid: string; blocked: boolean }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/block`, {
+    method: 'POST',
+    body: JSON.stringify({ number }),
+  });
+}
+
+export function unblockContact(
+  sessionId: string,
+  number: string,
+): Promise<{ jid: string; blocked: boolean }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/unblock`, {
+    method: 'POST',
+    body: JSON.stringify({ number }),
+  });
+}
