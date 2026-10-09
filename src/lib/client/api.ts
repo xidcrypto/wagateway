@@ -331,3 +331,26 @@ export function sendText(
     body: JSON.stringify({ to, text }),
   });
 }
+
+export type MessageFilter = {
+  remoteJid?: string;
+  direction?: '' | 'in' | 'out';
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export function searchMessages(
+  sessionId: string,
+  filter: MessageFilter,
+): Promise<{ messages: HistoryMessage[]; total: number; limit: number; offset: number }> {
+  const params = new URLSearchParams();
+  if (filter.remoteJid) params.set('remote_jid', filter.remoteJid);
+  if (filter.direction) params.set('direction', filter.direction);
+  if (filter.q) params.set('q', filter.q);
+  params.set('limit', String(filter.limit ?? 20));
+  params.set('offset', String(filter.offset ?? 0));
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages/history?${params.toString()}`,
+  );
+}
