@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scan QR — Verifikasi 1.8 (sementara)</title>
+<style>
+  body { background:#09090b; color:#fafafa; font-family:system-ui,sans-serif; display:flex; min-height:100vh; align-items:center; justify-content:center; margin:0; padding:16px; }
+  .card { background:#18181b; border:1px solid #27272a; border-radius:16px; padding:24px; max-width:380px; width:100%; text-align:center; }
+  img { width:280px; height:280px; background:#fff; border-radius:12px; margin:12px auto; display:block; }
+  .status { display:inline-block; padding:4px 14px; border-radius:999px; background:#27272a; font-size:14px; }
+  .status.open { background:#065f46; }
+  .ok { background:#052e22; color:#6ee7b7; border-radius:8px; padding:10px; margin-top:12px; font-size:14px; }
+  .warn { color:#fbbf24; font-size:13px; margin-top:10px; }
+  ol { text-align:left; font-size:13px; color:#a1a1aa; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Scan QR WhatsApp</h2>
+  <p style="font-size:13px;color:#a1a1aa">Halaman sementara untuk verifikasi 1.8 — QR refresh tiap 5 detik</p>
+  <img id="qr" alt="QR WhatsApp">
+  <p>Status: <span class="status" id="st">…</span></p>
+  <div class="ok" id="done" style="display:none">✅ Status OPEN! Kabari asisten untuk lanjut restart-restore.</div>
+  <p class="warn">Login dulu di <a href="/login" style="color:#6ee7b7">/login</a> bila QR tidak muncul.</p>
+  <ol>
+    <li>Buka WhatsApp di HP → Perangkat Tertaut → Tautkan Perangkat</li>
+    <li>Scan QR di atas (scan yang terbaru, QR berganti tiap ±20 detik)</li>
+    <li>Tunggu status berubah jadi <b>open</b></li>
+  </ol>
+</div>
+<script>
+  const sid = new URLSearchParams(location.search).get('sid') || '';
+  const token = localStorage.getItem('pansa_token');
+  const img = document.getElementById('qr');
+  const st = document.getElementById('st');
+  const done = document.getElementById('done');
+  if (!sid) { st.textContent = 'sid kosong — tambahkan ?sid=... di URL'; }
+  async function refresh() {
+    if (!sid || !token) return;
+    try {
+      const q = await (await fetch('/api/sessions/' + sid + '/qr', {
+        headers: { Authorization: 'Bearer ' + token }
+      })).json();
+      if (q.success && q.data.qr) {
+        // Ganti src hanya bila QR berubah (hindari flicker tiap poll).
+        if (img.dataset.hash !== String(q.data.qr.length) + q.data.qr.slice(-32)) {
+          img.src = q.data.qr;
+          img.dataset.hash = String(q.data.qr.length) + q.data.qr.slice(-32);
+        }
+      }
+      const s = await (await fetch('/api/sessions/' + sid + '/status', {
+        headers: { Authorization: 'Bearer ' + token }
+      })).json();
+      if (s.success) {
+        st.textContent = s.data.status + (s.data.phone ? ' (' + s.data.phone + ')' : '');
+        if (s.data.status === 'open') {
+          st.classList.add('open');
+          done.style.display = 'block';
+          clearInterval(timer);
+        }
+      }
+    } catch (e) { st.textContent = 'error: ' + e.message; }
+  }
+  const timer = setInterval(refresh, 3000);
+  refresh();
+</script>
+</body>
+</html>

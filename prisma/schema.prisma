@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum SessionStatus {
+  connecting
+  qr
+  pairing
+  open
+  closed
+  logged_out
+  stopped
+}
+
+enum Direction {
+  in
+  out
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+}
+
+enum BlastStatus {
+  queued
+  running
+  paused
+  done
+  cancelled
+  failed
+}
+
+enum RecipientStatus {
+  pending
+  sent
+  failed
+}
+
+model User {
+  id             Int             @id @default(autoincrement())
+  username       String          @unique @db.VarChar(32)
+  email          String          @unique @db.VarChar(255)
+  fullName       String          @map("full_name") @db.VarChar(255)
+  passwordHash   String          @map("password_hash")
+  phone          String?         @db.VarChar(32)
+  avatarUrl      String?         @map("avatar_url") @db.Text
+  role           Role            @default(user)
+  active         Boolean         @default(true)
+  webhookUrl     String?         @map("webhook_url") @db.Text
+  webhookSecret  String?         @map("webhook_secret")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  sessions       Session[]
+  passwordResets PasswordReset[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String        @id @db.Char(36)
+  ownerId   Int?          @map("owner_id")
+  owner     User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  label     String        @db.VarChar(255)
+  status    SessionStatus @default(connecting)
+  phone     String?       @db.VarChar(32)
+  waName    String?       @map("wa_name")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  messages  Message[]
+  blasts    Blast[]
+
+  @@map("sessions")
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("password_resets")
+}
+
+model SystemSetting {
+  key       String   @id @db.VarChar(255)
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("system_settings")
+}
+
+model Message {
+  id        BigInt         @id @default(autoincrement())
+  sessionId String         @map("session_id") @db.Char(36)
+  session   Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  direction Direction
+  waId      String?        @map("wa_id")
+  remoteJid String         @map("remote_jid")
+  msgType   String         @map("msg_type")
+  textBody  String?        @map("text_body") @db.Text
+  status    MessageStatus?
+  payload   Json?
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([sessionId, remoteJid, createdAt])
+  @@index([sessionId, waId])
+  @@map("messages")
+}
+
+model Blast {
+  id          Int              @id @default(autoincrement())
+  sessionId   String           @map("session_id") @db.Char(36)
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ownerId     Int?             @map("owner_id")
+  label       String
+  textBody    String           @map("text_body") @db.Text
+  mediaJson   Json?            @map("media_json")
+  buttonsJson Json?            @map("buttons_json")
+  total       Int              @default(0)
+  delayMin    Int              @map("delay_min")
+  delayMax    Int              @map("delay_max")
+  status      BlastStatus      @default(queued)
+  error       String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  startedAt   DateTime?        @map("started_at")
+  finishedAt  DateTime?        @map("finished_at")
+  recipients  BlastRecipient[]
+
+  @@map("blasts")
+}
+
+model BlastRecipient {
+  id      Int             @id @default(autoincrement())
+  blastId Int             @map("blast_id")
+  blast   Blast           @relation(fields: [blastId], references: [id], onDelete: Cascade)
+  phone   String          @db.VarChar(32)
+  vars    Json?
+  status  RecipientStatus @default(pending)
+  error   String?         @db.Text
+  sentAt  DateTime?       @map("sent_at")
+
+  @@index([blastId, status])
+  @@map("blast_recipients")
+}
