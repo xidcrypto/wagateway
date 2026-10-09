@@ -287,3 +287,47 @@ export function cancelPairingCode(
     method: 'DELETE',
   });
 }
+
+export type ConversationItem = {
+  remoteJid: string;
+  lastMessage: {
+    id: string;
+    direction: 'in' | 'out';
+    msgType: string;
+    textBody: string | null;
+    status: string | null;
+    createdAt: string;
+  };
+  total: string;
+};
+
+export function listConversations(
+  sessionId: string,
+  limit = 50,
+): Promise<{ conversations: ConversationItem[]; total: string }> {
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages/conversations?limit=${limit}`,
+  );
+}
+
+export function getHistory(
+  sessionId: string,
+  remoteJid: string,
+  limit = 50,
+): Promise<{ messages: HistoryMessage[]; total: number }> {
+  const q = `?remote_jid=${encodeURIComponent(remoteJid)}&limit=${limit}`;
+  return api(
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages/history${q}`,
+  );
+}
+
+export function sendText(
+  sessionId: string,
+  to: string,
+  text: string,
+): Promise<{ messageId: string; to: string; status: string }> {
+  return api(`/api/sessions/${encodeURIComponent(sessionId)}/send/text`, {
+    method: 'POST',
+    body: JSON.stringify({ to, text }),
+  });
+}

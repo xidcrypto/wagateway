@@ -56,7 +56,7 @@ Dokumen ini adalah satu-satunya sumber instruksi untuk proyek **Pansa Gateway**.
 - [x] 5.1 Layout dashboard (sidebar/drawer), auth guard, komponen reusable, tema gelap
 - [x] 5.2 Halaman dashboard
 - [x] 5.3 Halaman sessions
-- [ ] 5.4 Halaman chat
+- [x] 5.4 Halaman chat
 - [ ] 5.5 Halaman messages
 - [ ] 5.6 Halaman groups
 - [ ] 5.7 Halaman contacts
@@ -103,6 +103,7 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 | 2026-10-09 | 5.1 | src/app/layout.tsx, src/app/globals.css, src/app/(dashboard)/layout.tsx, src/components/layout/DashboardShell.tsx, src/components/ui/{Button,Card,Fields,Toast,Modal,StatusBadge}.tsx | Infrastruktur dashboard: root layout id + tema gelap tetap (dark, zinc-950), sidebar desktop 240px + drawer mobile + topbar, auth guard (/api/me, 401→/login, /admin khusus admin), 9 item nav, Toast host global, komponen reusable terpusat; tsc 0 + lint 0 error + build OK; deploy PM2 restart OK (health ok, logged_out dilewati restore, blast 8 done utuh); /login+/dashboard 200, halaman isi 5.2–5.10 masih 404 sesuai rencana |
 | 2026-10-09 | 5.2 | src/lib/client/api.ts (getAdminStats, countSessionMessages), src/app/(dashboard)/dashboard/page.tsx | Halaman dashboard: kartu statistik (admin: session/total-open + pesan in/out/hari ini + pengguna dari /api/admin/stats; user biasa: session miliknya + agregat in/out via history limit=1 per session) + daftar session + link ke /sessions; tsc 0 + lint 0 error + build OK; deploy OK (/login+/dashboard 200, kartu cocok angka API: 1 user, 1 session logged_out, 3 out hari ini dari blast 8) |
 | 2026-10-09 | 5.3 | src/lib/client/api.ts (create/update/delete/status/qr/start/stop/pairing), src/app/(dashboard)/sessions/page.tsx | Halaman sessions: buat session, QR sebagai gambar, pairing code (input nomor + tampilkan kode + batalkan), polling status+QR 3 dtk berhenti saat open, ubah label, stop/logout-hapus via modal konfirmasi; tsc 0 + lint 0 error (perbaiki TS2367 + setState-dalam-effect) + build OK; deploy OK (/sessions 200); uji live penuh via API (buat→qr 7642 char→label→stop→start→hapus, list akhir tinggal utama); session+pesan uji dibersihkan |
+| 2026-10-09 | 5.4 | src/lib/client/api.ts (listConversations, getHistory, sendText), src/app/(dashboard)/chat/page.tsx | Halaman chat: pilih session + kontak (dari conversations), chat baru via nomor, riwayat bubble in/out + centang status, kirim teks, polling 3 dtk, peringatan bila session belum open, layout 2 kolom desktop + 1 kolom mobile; tsc 0 + lint 0 error (perbaiki setState-dalam-effect ×2 + prefer-const) + build OK; deploy OK (/chat 200); uji API (conversations 3 kontak blast 8, history benar, kirim teks 409 tepat saat logged_out) |
 
 ### Catatan Keputusan Tambahan
 1. 2026-10-09 — Penyimpangan aturan global no. 2 (custom pairing code dihapus atas perintah user): `customCode`/`custom_code` + `pairingCodeSchema` dihapus dari `session-manager.requestPairing`, route `/pairing` + `/request-code`, dan `validators.ts`; `requestPairingCode(phone)` Baileys dipanggil tanpa argumen kode (kode 8 char selalu dari server WA). Field tak dikenal di body diabaikan zod (tidak error). Scan QR tetap tanpa nomor; pairing tetap wajib `{ phone }`.
