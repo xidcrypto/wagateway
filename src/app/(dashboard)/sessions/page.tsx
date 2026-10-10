@@ -9,7 +9,7 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { StatusOrb } from '@/components/ui/StatusOrb';
 import { EmptyState, Skeleton } from '@/components/ui/States';
-import { CopyButton } from '@/components/ui/Avatar';
+import { Avatar, CopyButton } from '@/components/ui/Avatar';
 import { Menu, TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
 import { useVisiblePoll } from '@/lib/client/use-poll';
@@ -18,6 +18,7 @@ import {
   cancelPairingCode,
   createSession,
   deleteSession,
+  getProfilePicture,
   getSessionQr,
   getSessionStatus,
   listSessions,
@@ -267,9 +268,27 @@ function SessionCard({
   const [label, setLabel] = useState(session.label);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.label);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const prevStatus = useRef(status?.status ?? session.status);
 
   const st = status?.status ?? session.status;
+
+  // Foto profil WA: diambil sekali saat kartu pertama tampil dalam status
+  // open; bila tidak ada (null / gagal) dipakai ikon inisial yang rapi.
+  useEffect(() => {
+    if (st !== 'open') return;
+    let cancelled = false;
+    getProfilePicture(session.id)
+      .then((r) => {
+        if (!cancelled) setPhotoUrl(typeof r.url === 'string' ? r.url : null);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id, st]);
 
   useVisiblePoll(async () => {
     try {
@@ -322,7 +341,12 @@ function SessionCard({
   return (
     <div className="rounded-card border border-border bg-card p-5 shadow-1">
       <div className="flex items-start gap-4">
-        <StatusOrb status={st} size={56} />
+        <span className="relative inline-flex shrink-0">
+          <Avatar name={session.label} src={st === 'open' ? photoUrl : null} size={56} />
+          <span className="absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card">
+            <StatusOrb status={st} size={12} />
+          </span>
+        </span>
         <div className="min-w-0 flex-1">
           {editing ? (
             <form

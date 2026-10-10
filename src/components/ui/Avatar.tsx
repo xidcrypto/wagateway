@@ -31,6 +31,8 @@ export function Avatar({
         alt={name}
         width={size}
         height={size}
+        loading="lazy"
+        referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         className="rounded-full object-cover"
         style={{ width: size, height: size }}
