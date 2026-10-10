@@ -99,7 +99,7 @@ async function handleReply(
     });
     if (!ticket) return fail('Tiket tidak ditemukan.', 404);
     if (String(ticket.status) === 'closed') {
-      return fail('Tiket sudah ditutup. Buat tiket baru bila masih butuh bantuan.', 409);
+      return fail('Tiket sudah ditutup permanen dan tidak bisa dibuka lagi.', 409);
     }
     // Klaim staged file milik pengirim di tiket ini (sekali pakai).
     let staged: { id: number; fileName: string; mime: string } | null = null;

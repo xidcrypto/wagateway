@@ -476,7 +476,7 @@ function CsContent() {
               />
               {detail.status === 'closed' ? (
                 <p className="mt-4 rounded-control border border-border bg-muted/50 px-3 py-2.5 text-[13px] leading-5 text-muted-foreground">
-                  Tiket ini sudah ditutup. Buat tiket baru bila masih butuh bantuan.
+                  Tiket ini sudah ditutup permanen dan tidak bisa dibuka lagi. Buat tiket baru bila masih butuh bantuan.
                 </p>
               ) : (
                 <TicketComposer

@@ -1261,8 +1261,20 @@ export function stageTicketImage(
     xhr.addEventListener('load', () => {
       const status = xhr?.status ?? 0;
       if (status === 401) {
-        redirectToLogin();
-        reject(new ApiError('Belum login. Silakan login dulu.', 401));
+        // 401 HANYA reload ke login bila token memang sudah hilang
+        // (sesi habis sungguhan). Bila token masih ada — 401 transien dari
+        // server — tampilkan error biasa, JANGAN reload halaman di tengah
+        // upload (itu yang bikin progress + preview hilang).
+        if (!getToken()) {
+          redirectToLogin();
+          reject(new ApiError('Sesi habis. Silakan login dulu.', 401));
+        } else {
+          reject(new ApiError('Sesi ditolak server. Coba lagi, atau login ulang bila berlanjut.', 401));
+        }
+        return;
+      }
+      if (status === 429) {
+        reject(new ApiError('Terlalu banyak unggahan. Tunggu sebentar lalu coba lagi.', 429));
         return;
       }
       let body: { success: boolean; data?: { staged: StagedImage }; error?: string };
@@ -1338,8 +1350,17 @@ export function uploadTicketImage(
     });
     xhr.addEventListener('load', () => {
       if (xhr.status === 401) {
-        redirectToLogin();
-        reject(new ApiError('Belum login. Silakan login dulu.', 401));
+        // Sama seperti stage: reload hanya bila token memang hilang.
+        if (!getToken()) {
+          redirectToLogin();
+          reject(new ApiError('Sesi habis. Silakan login dulu.', 401));
+        } else {
+          reject(new ApiError('Sesi ditolak server. Coba lagi, atau login ulang bila berlanjut.', 401));
+        }
+        return;
+      }
+      if (xhr.status === 429) {
+        reject(new ApiError('Terlalu banyak unggahan. Tunggu sebentar lalu coba lagi.', 429));
         return;
       }
       let body: { success: boolean; data?: { message: TicketMessage }; error?: string };
@@ -1408,12 +1429,12 @@ export function getAdminTicket(id: number): Promise<{ ticket: AdminTicketDetail 
   return api(`/api/admin/tickets/${id}`);
 }
 
-/** Admin membalas tiket (otomatis answered; closed ikut terbuka; stagedId opsional). */
+/** Admin membalas tiket (otomatis answered; closed ditolak 409 permanen; stagedId opsional). */
 export function replyAdminTicket(
   id: number,
   message: string,
   stagedId?: number,
-): Promise<{ replied: boolean; reopened: boolean; message: TicketMessage }> {
+): Promise<{ replied: boolean; message: TicketMessage }> {
   return api(`/api/admin/tickets/${id}`, {
     method: 'POST',
     body: JSON.stringify({ message, stagedId: stagedId ?? null }),

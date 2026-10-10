@@ -243,11 +243,7 @@ function TicketsContent() {
       await loadList(0, false);
       toast(
         'success',
-        stagedId !== null
-          ? 'Gambar terkirim ke user.'
-          : r.reopened
-            ? 'Tiket dibuka lagi dan balasan terkirim.'
-            : 'Balasan terkirim ke user.',
+        stagedId !== null ? 'Gambar terkirim ke user.' : 'Balasan terkirim ke user.',
       );
     } catch (err) {
       toast('error', errMsg(err, 'Gagal mengirim balasan.'));
@@ -432,34 +428,22 @@ function TicketsContent() {
               peerName={detail.user.username}
             />
             {detail.status === 'closed' ? (
-              <div className="mt-4 flex flex-col gap-2">
-                <p className="rounded-control border border-border bg-muted/50 px-3 py-2.5 text-[13px] leading-5 text-muted-foreground">
-                  Tiket ini ditutup. Balas untuk membukanya lagi, atau buka manual.
-                </p>
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={busyStatus}
-                    onClick={() => void handleStatus('open')}
-                  >
-                    Buka lagi
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            <TicketComposer
-              ticketId={detail.id}
-              placeholder="Tulis balasan ke user… (gambar langsung terunggah saat dipilih)"
-              sending={sending}
-              sendLabel="Kirim balasan"
-              showClose={detail.status !== 'closed'}
-              onCloseTicket={() => setConfirmClose(true)}
-              onSend={(text, stagedId) => void sendReply(text, stagedId)}
-              onTypingPing={handleTypingPing}
-              onError={(msg) => toast('error', msg)}
-            />
+              <p className="mt-4 rounded-control border border-border bg-muted/50 px-3 py-2.5 text-[13px] leading-5 text-muted-foreground">
+                Tiket ini sudah ditutup permanen dan tidak bisa dibuka lagi.
+              </p>
+            ) : (
+              <TicketComposer
+                ticketId={detail.id}
+                placeholder="Tulis balasan ke user… (gambar langsung terunggah saat dipilih)"
+                sending={sending}
+                sendLabel="Kirim balasan"
+                showClose
+                onCloseTicket={() => setConfirmClose(true)}
+                onSend={(text, stagedId) => void sendReply(text, stagedId)}
+                onTypingPing={handleTypingPing}
+                onError={(msg) => toast('error', msg)}
+              />
+            )}
           </Card>
         )}
       </div>

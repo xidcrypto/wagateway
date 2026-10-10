@@ -109,7 +109,11 @@ async function handleReply(
       select: { id: true, userId: true, subject: true, status: true },
     });
     if (!ticket) return fail('Tiket tidak ditemukan.', 404);
-    const wasClosed = String(ticket.status) === 'closed';
+    // Tiket yang sudah ditutup bersifat permanen — tidak bisa dibuka lagi
+    // oleh siapa pun (termasuk admin). Buat tiket baru bila masih butuh.
+    if (String(ticket.status) === 'closed') {
+      return fail('Tiket sudah ditutup permanen dan tidak bisa dibuka lagi.', 409);
+    }
     // Klaim staged milik admin ini di tiket ini (sekali pakai).
     // Admin virtual (id 0) menyimpan staged atas nama admin seed id 1 —
     // samakan dengan handleStage (userId: id===0 ? 1).
@@ -154,15 +158,14 @@ async function handleReply(
       ticketId: id,
       subject: ticket.subject,
       adminName: ctx.user.username,
-      reopened: wasClosed,
     });
-    return ok({ replied: true, reopened: wasClosed, message: toMessageWire(created) }, 201);
+    return ok({ replied: true, message: toMessageWire(created) }, 201);
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'Gagal membalas tiket.', 500);
   }
 }
 
-/** Admin membalas tiket (otomatis jadi answered; closed ikut terbuka lagi). */
+/** Admin membalas tiket (otomatis jadi answered; tiket closed ditolak 409 permanen). */
 export const POST = withRateLimit(withAuth(handleReply), {
   scope: 'ticket',
   limit: rateLimitFromEnv('RATE_LIMIT_TICKET', 30),
@@ -189,8 +192,12 @@ async function handleStatus(
     if (String(ticket.status) === next) {
       return ok({ ticket: { id: ticket.id, status: String(ticket.status) } });
     }
+    // Tiket closed permanen: tidak bisa diubah ke open/answered lagi.
+    if (String(ticket.status) === 'closed') {
+      return fail('Tiket sudah ditutup permanen dan tidak bisa dibuka lagi.', 409);
+    }
     await prisma.supportTicket.update({ where: { id }, data: { status: next } });
-    // Beri tahu user hanya untuk tutup/buka (answered sudah ter-cover balasan).
+    // Beri tahu user hanya saat tiket ditutup (answered sudah ter-cover balasan).
     if (next === 'closed') {
       await notifyUserTicket({
         userId: ticket.userId,
@@ -198,14 +205,6 @@ async function handleStatus(
         subject: ticket.subject,
         adminName: ctx.user.username,
         closed: true,
-      });
-    } else if (next === 'open' && String(ticket.status) === 'closed') {
-      await notifyUserTicket({
-        userId: ticket.userId,
-        ticketId: id,
-        subject: ticket.subject,
-        adminName: ctx.user.username,
-        reopened: true,
       });
     }
     return ok({ ticket: { id, status: next } });

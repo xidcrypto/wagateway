@@ -89,7 +89,7 @@ async function handleStage(
       select: { status: true },
     });
     if (status && String(status.status) === 'closed') {
-      return fail('Tiket sudah ditutup. Buat tiket baru bila masih butuh bantuan.', 409);
+      return fail('Tiket sudah ditutup permanen dan tidak bisa dibuka lagi.', 409);
     }
 
     const stored = await saveSupportImage(bytes, sniffed.ext);
