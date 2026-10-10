@@ -4,8 +4,22 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-/** Batas lampiran gambar tiket: 2 MB (sengaja kecil, chat CS bukan galeri). */
-export const SUPPORT_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+/**
+ * Batas lampiran gambar tiket. Default 10 MB, bisa diubah via env
+ * SUPPORT_IMAGE_MAX_MB (mis. 5 / 20). Server tetap final — client hanya
+ * cerminan untuk validasi awal.
+ */
+export function supportImageMaxBytes(): number {
+  const raw = Number(process.env.SUPPORT_IMAGE_MAX_MB ?? '10');
+  if (!Number.isFinite(raw) || raw < 1 || raw > 64) return 10 * 1024 * 1024;
+  return Math.floor(raw) * 1024 * 1024;
+}
+
+/** Label batas untuk pesan error (mis. "10 MB"). */
+export function supportImageMaxLabel(): string {
+  const mb = Math.round(supportImageMaxBytes() / 1024 / 1024);
+  return `${mb} MB`;
+}
 
 const ALLOWED: Array<{ mime: string; ext: string }> = [
   { mime: 'image/jpeg', ext: 'jpg' },

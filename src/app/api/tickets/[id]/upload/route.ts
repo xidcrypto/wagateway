@@ -5,7 +5,8 @@ import { publishTicketMessage } from '@/lib/server/ticket-live';
 import {
   saveSupportImage,
   sniffImage,
-  SUPPORT_IMAGE_MAX_BYTES,
+  supportImageMaxBytes,
+  supportImageMaxLabel,
 } from '@/lib/server/support-media';
 import { prisma } from '@/lib/server/prisma';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
@@ -71,8 +72,8 @@ async function handleUpload(
   if (!(file instanceof File)) {
     return fail('Field image wajib diisi file gambar.', 400);
   }
-  if (file.size > SUPPORT_IMAGE_MAX_BYTES) {
-    return fail('Gambar kebesaran (maksimal 2 MB).', 413);
+  if (file.size > supportImageMaxBytes()) {
+    return fail(`Gambar kebesaran (maksimal ${supportImageMaxLabel()}).`, 413);
   }
   if (file.size === 0) {
     return fail('File gambar kosong.', 400);

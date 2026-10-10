@@ -1215,37 +1215,78 @@ export function getTicketPresence(): Promise<{ adminOnline: boolean }> {
   return api('/api/tickets/presence');
 }
 
-/** Unggah gambar ke tiket (multipart; caption opsional ≤500 char). */
-export async function uploadTicketImage(
+/** Batas upload client (10 MB, cerminan default server; server tetap final). */
+export const TICKET_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+/**
+ * Unggah gambar ke tiket (multipart; caption opsional ≤500 char).
+ * Pakai XHR agar ada progress upload (fetch tak bisa lapor progress
+ * kirim). onProgress menerima persen 0–100.
+ */
+export function uploadTicketImage(
   id: number,
   file: File,
   caption?: string,
+  onProgress?: (percent: number) => void,
 ): Promise<{ message: TicketMessage }> {
-  const token = getToken();
-  const form = new FormData();
-  form.append('image', file);
-  if (caption) form.append('caption', caption);
-  const headers = new Headers();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  let res: Response;
-  try {
-    res = await fetch(`/api/tickets/${id}/upload`, { method: 'POST', headers, body: form });
-  } catch {
-    throw new ApiError('Tidak bisa menghubungi server. Periksa koneksi.', 0);
-  }
-  if (res.status === 401) {
-    throw new ApiError('Belum login. Silakan login dulu.', 401);
-  }
-  let body: { success: boolean; data?: { message: TicketMessage }; error?: string };
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    throw new ApiError(`Respons server tidak valid (HTTP ${res.status}).`, res.status);
-  }
-  if (!body.success || !body.data) {
-    throw new ApiError(body.error || 'Gagal mengunggah gambar.', res.status);
-  }
-  return body.data;
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('image', file);
+    if (caption) form.append('caption', caption);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/tickets/${id}/upload`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      try {
+        onProgress?.(Math.min(100, Math.round((e.loaded / e.total) * 100)));
+      } catch {
+        // Abaikan.
+      }
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 401) {
+        redirectToLogin();
+        reject(new ApiError('Belum login. Silakan login dulu.', 401));
+        return;
+      }
+      let body: { success: boolean; data?: { message: TicketMessage }; error?: string };
+      try {
+        body = JSON.parse(xhr.responseText) as typeof body;
+      } catch {
+        reject(new ApiError(`Respons server tidak valid (HTTP ${xhr.status}).`, xhr.status));
+        return;
+      }
+      if (xhr.status === 413) {
+        reject(new ApiError(body.error || 'Gambar kebesaran.', 413));
+        return;
+      }
+      if (!body.success || !body.data) {
+        reject(new ApiError(body.error || 'Gagal mengunggah gambar.', xhr.status));
+        return;
+      }
+      try {
+        onProgress?.(100);
+      } catch {
+        // Abaikan.
+      }
+      resolve(body.data);
+    });
+    xhr.addEventListener('error', () => {
+      reject(new ApiError('Tidak bisa menghubungi server. Periksa koneksi.', 0));
+    });
+    xhr.addEventListener('abort', () => {
+      reject(new ApiError('Unggahan dibatalkan.', 0));
+    });
+    xhr.send(form);
+  });
 }
 
 /** Tutup tiket milik sendiri. */

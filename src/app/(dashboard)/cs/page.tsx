@@ -107,6 +107,7 @@ function CsContent() {
   const [peerTyping, setPeerTyping] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
   const typingSentAt = useRef(0);
   const selectedRef = useRef<number | null>(null);
@@ -321,8 +322,11 @@ function CsContent() {
   async function sendImage(file: File, caption: string): Promise<void> {
     if (!detail || detail.status === 'closed' || uploading) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const r = await uploadTicketImage(detail.id, file, caption || undefined);
+      const r = await uploadTicketImage(detail.id, file, caption || undefined, (p) =>
+        setUploadProgress(p),
+      );
       setDetail((prev) => {
         if (!prev || prev.id !== detail.id) return prev;
         if (prev.messages.some((x) => x.id === r.message.id)) return prev;
@@ -334,6 +338,7 @@ function CsContent() {
       toast('error', err instanceof ApiError ? err.message : 'Gagal mengunggah gambar.');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -500,14 +505,16 @@ function CsContent() {
                 </p>
               ) : (
                 <TicketComposer
-                  placeholder="Tulis balasan… (maks 2000 char, gambar ≤2 MB)"
+                  placeholder="Tulis balasan… (maks 2000 char, gambar ≤10 MB)"
                   sending={sending}
                   uploading={uploading}
+                  progress={uploadProgress}
                   showClose
                   onCloseTicket={() => setConfirmClose(true)}
                   onSendText={(text) => void sendText(text)}
                   onSendImage={(file, caption) => void sendImage(file, caption)}
                   onTypingPing={handleTypingPing}
+                  onError={(msg) => toast('error', msg)}
                 />
               )}
             </Card>
