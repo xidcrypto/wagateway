@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, Send } from 'lucide-react';
+import { ImagePlus, Search, Send } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -12,14 +12,22 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { TicketThread } from '@/components/support/TicketThread';
 import { errMsg, formatDateTime, ADMIN_PAGE } from '@/components/admin/shared';
 import { toast } from '@/components/ui/Toast';
-import { useLiveEvents, type LiveNotificationEvent } from '@/lib/client/use-live';
+import {
+  useLiveEvents,
+  type LiveNotificationEvent,
+  type LiveTicketMessageEvent,
+  type LiveTicketTypingEvent,
+} from '@/lib/client/use-live';
 import {
   getAdminTicket,
   listAdminTickets,
   replyAdminTicket,
+  sendTicketTyping,
   setAdminTicketStatus,
+  uploadTicketImage,
   type AdminTicketDetail,
   type AdminTicketListItem,
+  type TicketMessage,
 } from '@/lib/client/api';
 import { cn } from '@/lib/client/cn';
 
@@ -67,6 +75,17 @@ function TicketsContent() {
   const [sending, setSending] = useState(false);
   const [busyStatus, setBusyStatus] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const typingTimer = useRef<number | null>(null);
+  const typingSentAt = useRef(0);
+  const selectedRef = useRef<number | null>(null);
+
+  // Sinkron ref di effect (bukan saat render) — dipakai callback SSE.
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
 
   const loadList = useCallback(
     async (offset: number, append: boolean) => {
@@ -120,6 +139,7 @@ function TicketsContent() {
       setDetail(null);
       setDetailLoading(true);
       setDetailError(null);
+      setPeerTyping(false);
       try {
         const r = await getAdminTicket(selectedId as number);
         if (cancelled) return;
@@ -139,14 +159,50 @@ function TicketsContent() {
     };
   }, [selectedId]);
 
-  // Realtime: tiket baru / balasan user → refresh daftar + thread bila dibuka.
+  // Hilangkan indikator typing 5 dtk setelah sinyal terakhir.
+  function pokeTyping(): void {
+    setPeerTyping(true);
+    if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => setPeerTyping(false), 5000);
+  }
+
+  // Realtime: tiket baru / balasan user → daftar + thread tanpa refetch.
   useLiveEvents({
     onNotification: (ev: LiveNotificationEvent) => {
       if (ev.data.kind !== 'ticket_new') return;
       void loadList(0, false);
       const m = ev.data.link?.match(/[?&]id=(\d+)/);
       const tid = m ? Number(m[1]) : null;
-      if (tid && tid === selectedId) {
+      if (tid && tid === selectedRef.current) {
+        getAdminTicket(tid)
+          .then((r) => setDetail(r.ticket))
+          .catch(() => {});
+      }
+    },
+    onTicketMessage: (ev: LiveTicketMessageEvent) => {
+      if (ev.ticketId !== selectedRef.current) {
+        // Tiket lain: cukup segarkan daftar (badge Baru).
+        void loadList(0, false);
+        return;
+      }
+      const msg = ev.data as TicketMessage;
+      if (!msg || !msg.id) return;
+      setDetail((prev) => {
+        if (!prev || prev.id !== ev.ticketId) return prev;
+        if (prev.messages.some((x) => x.id === msg.id)) return prev;
+        return { ...prev, messages: [...prev.messages, msg] };
+      });
+      void loadList(0, false);
+    },
+    onTicketTyping: (ev: LiveTicketTypingEvent) => {
+      // Hanya typing DARI user yang ditampilkan di sisi admin.
+      if (ev.ticketId !== selectedRef.current || ev.fromAdmin) return;
+      pokeTyping();
+    },
+    onPoll: () => {
+      void loadList(0, false);
+      const tid = selectedRef.current;
+      if (tid) {
         getAdminTicket(tid)
           .then((r) => setDetail(r.ticket))
           .catch(() => {});
@@ -154,9 +210,17 @@ function TicketsContent() {
     },
   });
 
+  // Bersihkan timer typing saat unmount.
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    };
+  }, []);
+
   function openTicket(id: number): void {
     setReply('');
     setDetailError(null);
+    setPeerTyping(false);
     router.push(`/admin/tickets?id=${id}`);
   }
 
@@ -164,6 +228,7 @@ function TicketsContent() {
     setDetail(null);
     setDetailError(null);
     setReply('');
+    setPeerTyping(false);
     router.push('/admin/tickets');
   }
 
@@ -174,14 +239,58 @@ function TicketsContent() {
     try {
       const r = await replyAdminTicket(detail.id, reply.trim());
       setReply('');
-      const d = await getAdminTicket(detail.id);
-      setDetail(d.ticket);
+      // Optimistic via respons (SSE ticket.message jadi dedup).
+      setDetail((prev) => {
+        if (!prev || prev.id !== detail.id) return prev;
+        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
+        return { ...prev, messages: [...prev.messages, r.message], status: 'answered' };
+      });
       await loadList(0, false);
       toast('success', r.reopened ? 'Tiket dibuka lagi dan balasan terkirim.' : 'Balasan terkirim ke user.');
     } catch (err) {
       toast('error', errMsg(err, 'Gagal mengirim balasan.'));
     } finally {
       setSending(false);
+    }
+  }
+
+  /** Beri tahu user "CS sedang mengetik" (debounce 3 dtk). */
+  function handleTypingPing(): void {
+    if (!selectedId) return;
+    const now = Date.now();
+    if (now - typingSentAt.current < 3000) return;
+    typingSentAt.current = now;
+    sendTicketTyping(selectedId).catch(() => {});
+  }
+
+  async function handleFile(file: File): Promise<void> {
+    if (!detail) return;
+    if (!file.type.startsWith('image/')) {
+      toast('error', 'Hanya file gambar (jpg, png, webp, gif).');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast('error', 'Gambar kebesaran (maksimal 2 MB).');
+      return;
+    }
+    setUploading(true);
+    try {
+      const caption = reply.trim().slice(0, 500);
+      const r = await uploadTicketImage(detail.id, file, caption || undefined);
+      if (caption) setReply('');
+      setDetail((prev) => {
+        if (!prev || prev.id !== detail.id) return prev;
+        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
+        return { ...prev, messages: [...prev.messages, r.message], status: 'answered' };
+      });
+      handleTypingPing();
+      await loadList(0, false);
+      toast('success', 'Gambar terkirim ke user.');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal mengunggah gambar.'));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
@@ -344,12 +453,21 @@ function TicketsContent() {
               <Avatar name={detail.user.fullName || detail.user.username} size={24} />
               {detail.user.fullName} (@{detail.user.username})
             </p>
-            <TicketThread messages={detail.messages} />
+            <TicketThread
+              messages={detail.messages}
+              peerReadAt={detail.peerReadAt}
+              isAdminView
+              peerTyping={peerTyping}
+              peerName={detail.user.username}
+            />
             <form onSubmit={(e) => void handleReply(e)} className="mt-4 flex flex-col gap-2">
               <TextArea
                 aria-label="Tulis balasan ke user"
                 value={reply}
-                onChange={(e) => setReply(e.target.value)}
+                onChange={(e) => {
+                  setReply(e.target.value);
+                  handleTypingPing();
+                }}
                 placeholder={
                   detail.status === 'closed'
                     ? 'Tiket ditutup — balas untuk membukanya lagi…'
@@ -357,7 +475,18 @@ function TicketsContent() {
                 }
                 maxLength={2000}
                 rows={3}
-                required
+                required={false}
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                aria-label="Lampirkan gambar"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleFile(f);
+                }}
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex gap-2">
@@ -381,6 +510,16 @@ function TicketsContent() {
                       Tutup tiket
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                    aria-label="Lampirkan gambar (maks 2 MB)"
+                  >
+                    <ImagePlus size={14} /> {uploading ? 'Mengunggah…' : 'Gambar'}
+                  </Button>
                 </span>
                 <Button type="submit" size="sm" disabled={sending || !reply.trim()}>
                   <Send size={14} /> {sending ? 'Mengirim…' : 'Kirim balasan'}

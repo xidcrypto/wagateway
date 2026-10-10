@@ -347,6 +347,33 @@ body {
   content: '';
 }
 
+/* Titik-titik "sedang mengetik" (transform + opacity saja, hormati reduced-motion). */
+.typing-dots span[aria-hidden] {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+  opacity: 0.4;
+  animation: typing-bounce 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.typing-dots span[aria-hidden]:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dots span[aria-hidden]:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 /* Hormati reduced-motion: matikan dekoratif. */
 @media (prefers-reduced-motion: reduce) {
   .notif-pop,
@@ -369,6 +396,10 @@ body {
   }
   .orb-blink {
     animation: none;
+  }
+  .typing-dots span[aria-hidden] {
+    animation: none;
+    opacity: 1;
   }
   .scanline {
     animation: none;
@@ -402,6 +433,10 @@ html.reduce-motion .notif-item,
 html.reduce-motion .notif-badge,
 html.reduce-motion .notif-dot {
   animation: none;
+}
+html.reduce-motion .typing-dots span[aria-hidden] {
+  animation: none;
+  opacity: 1;
 }
 html.reduce-motion .reveal {
   opacity: 1;

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Headset, Plus, Send } from 'lucide-react';
+import { Headset, ImagePlus, Plus, Send } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
@@ -10,16 +10,26 @@ import { TextArea, TextInput } from '@/components/ui/Fields';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { TicketThread } from '@/components/support/TicketThread';
 import { toast } from '@/components/ui/Toast';
-import { useLiveEvents, type LiveNotificationEvent } from '@/lib/client/use-live';
+import {
+  useLiveEvents,
+  type LiveNotificationEvent,
+  type LiveTicketMessageEvent,
+  type LiveTicketPresenceEvent,
+  type LiveTicketTypingEvent,
+} from '@/lib/client/use-live';
 import {
   ApiError,
   closeTicket,
   createTicket,
   getTicket,
+  getTicketPresence,
   listTickets,
   replyTicket,
+  sendTicketTyping,
+  uploadTicketImage,
   type TicketDetail,
   type TicketListItem,
+  type TicketMessage,
 } from '@/lib/client/api';
 import { cn } from '@/lib/client/cn';
 
@@ -35,6 +45,9 @@ const STATUS_CLASS: Record<string, string> = {
   closed: 'bg-muted text-muted-foreground border-border',
 };
 
+/** Batas upload client (2 MB, sama dengan server; server tetap final). */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
 function StatusPill({ status }: { status: string }) {
   return (
     <span
@@ -44,6 +57,21 @@ function StatusPill({ status }: { status: string }) {
       )}
     >
       {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+function AdminOnlineDot({ online }: { online: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span
+        aria-hidden="true"
+        className={cn(
+          'h-2 w-2 rounded-full',
+          online ? 'bg-status-open' : 'bg-border',
+        )}
+      />
+      {online ? 'CS online' : 'CS offline'}
     </span>
   );
 }
@@ -79,7 +107,18 @@ function CsContent() {
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [adminOnline, setAdminOnline] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const typingTimer = useRef<number | null>(null);
+  const typingSentAt = useRef(0);
+  const selectedRef = useRef<number | null>(null);
+
+  // Sinkron ref di effect (bukan saat render) — dipakai callback SSE.
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
 
   const loadList = useCallback(async () => {
     setError(null);
@@ -110,8 +149,21 @@ function CsContent() {
     };
   }, []);
 
+  // Snapshot status online CS (sumber utama tetap event SSE).
+  useEffect(() => {
+    let cancelled = false;
+    getTicketPresence()
+      .then((r) => {
+        if (!cancelled) setAdminOnline(r.adminOnline);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Muat thread tiket terpilih; ?id= ikut didukung (tautan dari notifikasi).
-  // Seluruh setState di dalam rantai promise (async), bukan sinkron di body.
+  // Seluruh setState di dalam fungsi async, bukan sinkron di body.
   useEffect(() => {
     if (!selectedId) return;
     let cancelled = false;
@@ -119,6 +171,7 @@ function CsContent() {
       setDetail(null);
       setDetailLoading(true);
       setDetailError(null);
+      setPeerTyping(false);
       try {
         const r = await getTicket(selectedId as number);
         if (cancelled) return;
@@ -139,8 +192,14 @@ function CsContent() {
     };
   }, [selectedId]);
 
-  // Realtime: balasan CS masuk → tandai unread + refresh thread bila sedang dibuka.
-  useLiveEvents({
+  // Hilangkan indikator typing 5 dtk setelah sinyal terakhir.
+  function pokeTyping(): void {
+    setPeerTyping(true);
+    if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => setPeerTyping(false), 5000);
+  }
+
+  const live = useLiveEvents({
     onNotification: (ev: LiveNotificationEvent) => {
       if (ev.data.kind !== 'ticket_reply') return;
       const m = ev.data.link?.match(/[?&]id=(\d+)/);
@@ -154,7 +213,41 @@ function CsContent() {
           t.id === tid ? { ...t, hasUnread: true, status: 'answered', updatedAt: ev.data.createdAt } : t,
         ),
       );
-      if (tid === selectedId) {
+      // Thread di-refresh via ticket.message (di bawah); fallback bila SSE
+      // pesan hilang: refetch bila thread sedang dibuka.
+      if (tid === selectedRef.current) {
+        getTicket(tid)
+          .then((r) => setDetail(r.ticket))
+          .catch(() => {});
+      }
+    },
+    onTicketMessage: (ev: LiveTicketMessageEvent) => {
+      // Pesan baru masuk langsung ke thread tanpa refetch (fallback tetap ada).
+      if (ev.ticketId !== selectedRef.current) return;
+      const msg = ev.data as TicketMessage;
+      if (!msg || !msg.id) return;
+      setDetail((prev) => {
+        if (!prev || prev.id !== ev.ticketId) return prev;
+        if (prev.messages.some((x) => x.id === msg.id)) return prev;
+        return { ...prev, messages: [...prev.messages, msg] };
+      });
+    },
+    onTicketTyping: (ev: LiveTicketTypingEvent) => {
+      // Hanya typing DARI cs yang ditampilkan di sisi user.
+      if (ev.ticketId !== selectedRef.current || !ev.fromAdmin) return;
+      pokeTyping();
+    },
+    onTicketPresence: (ev: LiveTicketPresenceEvent) => {
+      setAdminOnline(ev.adminOnline);
+    },
+    onPoll: () => {
+      // Fallback SSE down: refresh ringan (daftar + presence + thread).
+      void loadList();
+      getTicketPresence()
+        .then((r) => setAdminOnline(r.adminOnline))
+        .catch(() => {});
+      const tid = selectedRef.current;
+      if (tid) {
         getTicket(tid)
           .then((r) => setDetail(r.ticket))
           .catch(() => {});
@@ -162,13 +255,17 @@ function CsContent() {
     },
   });
 
+  // Bersihkan timer typing saat pindah tiket / unmount.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [detail?.messages.length]);
+    return () => {
+      if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    };
+  }, []);
 
   function openTicket(id: number): void {
     setReply('');
     setDetailError(null);
+    setPeerTyping(false);
     router.push(`/cs?id=${id}`);
   }
 
@@ -176,6 +273,7 @@ function CsContent() {
     setDetail(null);
     setDetailError(null);
     setReply('');
+    setPeerTyping(false);
     router.push('/cs');
   }
 
@@ -210,15 +308,58 @@ function CsContent() {
     if (!detail || !reply.trim()) return;
     setSending(true);
     try {
-      await replyTicket(detail.id, reply.trim());
+      const r = await replyTicket(detail.id, reply.trim());
       setReply('');
-      const r = await getTicket(detail.id);
-      setDetail(r.ticket);
+      // Optimistic via respons (SSE ticket.message jadi dedup).
+      setDetail((prev) => {
+        if (!prev || prev.id !== detail.id) return prev;
+        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
+        return { ...prev, messages: [...prev.messages, r.message] };
+      });
       toast('success', 'Balasan terkirim.');
     } catch (err) {
       toast('error', err instanceof ApiError ? err.message : 'Gagal mengirim balasan.');
     } finally {
       setSending(false);
+    }
+  }
+
+  /** Beri tahu CS "user sedang mengetik" (debounce 3 dtk, ikut mengetik gambar). */
+  function handleTypingPing(): void {
+    if (!selectedId || detail?.status === 'closed') return;
+    const now = Date.now();
+    if (now - typingSentAt.current < 3000) return;
+    typingSentAt.current = now;
+    sendTicketTyping(selectedId).catch(() => {});
+  }
+
+  async function handleFile(file: File): Promise<void> {
+    if (!detail || detail.status === 'closed') return;
+    if (!file.type.startsWith('image/')) {
+      toast('error', 'Hanya file gambar (jpg, png, webp, gif).');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast('error', 'Gambar kebesaran (maksimal 2 MB).');
+      return;
+    }
+    setUploading(true);
+    try {
+      const caption = reply.trim().slice(0, 500);
+      const r = await uploadTicketImage(detail.id, file, caption || undefined);
+      if (caption) setReply('');
+      setDetail((prev) => {
+        if (!prev || prev.id !== detail.id) return prev;
+        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
+        return { ...prev, messages: [...prev.messages, r.message] };
+      });
+      handleTypingPing();
+      toast('success', 'Gambar terkirim.');
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : 'Gagal mengunggah gambar.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
@@ -267,8 +408,12 @@ function CsContent() {
             <Headset size={22} className="text-muted-foreground" />
             Hubungi CS
           </h1>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Ada kendala atau pertanyaan? Buat tiket, CS kami akan membalas di sini.
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6 text-muted-foreground">
+            <span>Ada kendala atau pertanyaan? Buat tiket, CS kami akan membalas di sini.</span>
+            <AdminOnlineDot online={adminOnline} />
+            {!live.connected ? (
+              <span className="text-[11px]">(mode polling)</span>
+            ) : null}
           </p>
         </div>
         <Button size="sm" onClick={() => setShowNew(true)}>
@@ -357,8 +502,15 @@ function CsContent() {
               >
                 ← Kembali ke daftar
               </button>
-              <TicketThread messages={detail.messages} />
-              <div ref={bottomRef} />
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <AdminOnlineDot online={adminOnline} />
+              </div>
+              <TicketThread
+                messages={detail.messages}
+                peerReadAt={detail.peerReadAt}
+                peerTyping={peerTyping}
+                peerName="CS"
+              />
               {detail.status === 'closed' ? (
                 <p className="mt-4 rounded-control border border-border bg-muted/50 px-3 py-2.5 text-[13px] leading-5 text-muted-foreground">
                   Tiket ini sudah ditutup. Buat tiket baru bila masih butuh bantuan.
@@ -368,22 +520,48 @@ function CsContent() {
                   <TextArea
                     aria-label="Tulis balasan"
                     value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    placeholder="Tulis balasan… (Enter untuk baris baru)"
+                    onChange={(e) => {
+                      setReply(e.target.value);
+                      handleTypingPing();
+                    }}
+                    placeholder="Tulis balasan… (maks 2000 char, gambar ≤2 MB)"
                     maxLength={2000}
                     rows={3}
-                    required
+                    required={false}
+                  />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    aria-label="Lampirkan gambar"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleFile(f);
+                    }}
                   />
                   <div className="flex items-center justify-between gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setConfirmClose(true)}
-                    >
-                      Tutup tiket
-                    </Button>
-                    <Button type="submit" size="sm" disabled={sending || !reply.trim()}>
+                    <span className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setConfirmClose(true)}
+                      >
+                        Tutup tiket
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => fileRef.current?.click()}
+                        aria-label="Lampirkan gambar (maks 2 MB)"
+                      >
+                        <ImagePlus size={14} /> {uploading ? 'Mengunggah…' : 'Gambar'}
+                      </Button>
+                    </span>
+                    <Button type="submit" size="sm" disabled={sending || (!reply.trim() && !uploading)}>
                       <Send size={14} /> {sending ? 'Mengirim…' : 'Kirim'}
                     </Button>
                   </div>

@@ -221,6 +221,8 @@ model SupportMessage {
   sender    User?         @relation("SupportSender", fields: [senderId], references: [id], onDelete: SetNull)
   fromAdmin Boolean       @default(false) @map("from_admin")
   body      String        @db.Text
+  mediaPath String?       @map("media_path") @db.VarChar(512)
+  mediaMime String?       @map("media_mime") @db.VarChar(64)
   createdAt DateTime      @default(now()) @map("created_at")
 
   @@index([ticketId, createdAt])

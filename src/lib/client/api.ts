@@ -1153,6 +1153,8 @@ export type TicketMessage = {
   id: string;
   fromAdmin: boolean;
   body: string;
+  mediaUrl: string | null;
+  mediaMime: string | null;
   createdAt: string;
   sender: { id: number; username: string; fullName: string } | null;
 };
@@ -1161,6 +1163,10 @@ export type TicketDetail = {
   id: number;
   subject: string;
   status: 'open' | 'answered' | 'closed';
+  /** ISO kapan LAWAN terakhir membaca (untuk centang biru pesan sendiri). */
+  peerReadAt: string | null;
+  /** ISO kapan SAYA terakhir membaca. */
+  myReadAt: string | null;
   createdAt: string;
   updatedAt: string;
   user: { id: number; username: string; fullName: string };
@@ -1189,11 +1195,57 @@ export function getTicket(id: number): Promise<{ ticket: TicketDetail }> {
 }
 
 /** Balas tiket milik sendiri (409 bila sudah ditutup). */
-export function replyTicket(id: number, message: string): Promise<{ replied: boolean }> {
+export function replyTicket(
+  id: number,
+  message: string,
+): Promise<{ replied: boolean; message: TicketMessage }> {
   return api(`/api/tickets/${id}`, {
     method: 'POST',
     body: JSON.stringify({ message }),
   });
+}
+
+/** Kirim sinyal "sedang mengetik" (ringan, rate-limit server). */
+export function sendTicketTyping(id: number): Promise<{ typing: boolean }> {
+  return api(`/api/tickets/${id}/typing`, { method: 'POST' });
+}
+
+/** Status online CS (fallback bila SSE down). */
+export function getTicketPresence(): Promise<{ adminOnline: boolean }> {
+  return api('/api/tickets/presence');
+}
+
+/** Unggah gambar ke tiket (multipart; caption opsional ≤500 char). */
+export async function uploadTicketImage(
+  id: number,
+  file: File,
+  caption?: string,
+): Promise<{ message: TicketMessage }> {
+  const token = getToken();
+  const form = new FormData();
+  form.append('image', file);
+  if (caption) form.append('caption', caption);
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  let res: Response;
+  try {
+    res = await fetch(`/api/tickets/${id}/upload`, { method: 'POST', headers, body: form });
+  } catch {
+    throw new ApiError('Tidak bisa menghubungi server. Periksa koneksi.', 0);
+  }
+  if (res.status === 401) {
+    throw new ApiError('Belum login. Silakan login dulu.', 401);
+  }
+  let body: { success: boolean; data?: { message: TicketMessage }; error?: string };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    throw new ApiError(`Respons server tidak valid (HTTP ${res.status}).`, res.status);
+  }
+  if (!body.success || !body.data) {
+    throw new ApiError(body.error || 'Gagal mengunggah gambar.', res.status);
+  }
+  return body.data;
 }
 
 /** Tutup tiket milik sendiri. */
@@ -1234,7 +1286,7 @@ export function getAdminTicket(id: number): Promise<{ ticket: AdminTicketDetail 
 export function replyAdminTicket(
   id: number,
   message: string,
-): Promise<{ replied: boolean; reopened: boolean }> {
+): Promise<{ replied: boolean; reopened: boolean; message: TicketMessage }> {
   return api(`/api/admin/tickets/${id}`, {
     method: 'POST',
     body: JSON.stringify({ message }),

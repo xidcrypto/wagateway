@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticate, isAdmin } from '@/lib/server/auth';
 import { onLiveEvent } from '@/lib/server/live-bus';
+import { adminConnected, isAnyAdminOnline } from '@/lib/server/ticket-live';
 import { prisma } from '@/lib/server/prisma';
 import type { SessionEvent } from '@/lib/server/session-manager';
 import { applyCors, applySecurityHeaders } from '@/lib/server/response';
@@ -81,6 +82,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
+  let releasePresence: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -96,6 +98,19 @@ export async function GET(req: NextRequest): Promise<Response> {
       // Sapa + info koneksi (client pakai ini sebagai tanda SSE hidup).
       send('ready', { ok: true, at: new Date().toISOString() });
 
+      // Presence admin: stream admin terbuka = "CS online" untuk user.
+      // Snapshot awal agar user yang sudah buka /cs tahu status saat ini;
+      // perubahan berikutnya disiarkan lewat event 'ticket.presence'.
+      if (admin) {
+        releasePresence = adminConnected(userId);
+      } else {
+        send('ticket.presence', {
+          event: 'ticket.presence',
+          adminOnline: isAnyAdminOnline(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       unsubscribe = onLiveEvent((ev) => {
         void (async () => {
           try {
@@ -105,6 +120,39 @@ export async function GET(req: NextRequest): Promise<Response> {
             if (raw.event === 'notification') {
               if (raw.userId !== userId) return;
               send('notification', ev);
+              return;
+            }
+            // Event tiket CS: typing (semua pihak tiket itu) + presence
+            // (semua user biasa) + message (pemilik tiket / admin).
+            if (raw.event === 'ticket.typing' || raw.event === 'ticket.presence') {
+              const wire = ev as unknown as { ticketId?: number };
+              if (raw.event === 'ticket.presence') {
+                if (admin) return;
+                send('ticket.presence', ev);
+                return;
+              }
+              const allowed = await ticketVisibleTo(
+                Number(wire.ticketId),
+                admin,
+                userId,
+              );
+              if (!allowed) return;
+              send('ticket.typing', ev);
+              return;
+            }
+            if (raw.event === 'ticket.message') {
+              const wire = ev as unknown as { ticketId?: number; userId?: number };
+              const tid = Number(wire.ticketId);
+              if (!Number.isFinite(tid)) return;
+              if (admin) {
+                send('ticket.message', ev);
+                return;
+              }
+              if (wire.userId !== userId) return;
+              // Pemilik tiket: pastikan tiketnya masih miliknya.
+              const allowed = await ticketVisibleTo(tid, false, userId);
+              if (!allowed) return;
+              send('ticket.message', ev);
               return;
             }
             if (isSessionEvent(ev)) {
@@ -134,6 +182,15 @@ export async function GET(req: NextRequest): Promise<Response> {
     cancel() {
       if (heartbeat) clearInterval(heartbeat);
       if (unsubscribe) unsubscribe();
+      // Tutup stream admin terakhir = CS offline (siarkan status baru).
+      if (releasePresence) {
+        try {
+          releasePresence();
+        } catch {
+          // Abaikan.
+        }
+        releasePresence = null;
+      }
     },
   });
 
@@ -156,4 +213,19 @@ type LiveWireEvent =
 
 function isSessionEvent(ev: LiveWireEvent): ev is SessionEvent {
   return (ev as SessionEvent).sessionId !== undefined;
+}
+
+/** True bila tiket terlihat oleh user (pemiliknya). Admin selalu true. */
+async function ticketVisibleTo(ticketId: number, admin: boolean, userId: number): Promise<boolean> {
+  if (admin) return true;
+  if (!Number.isFinite(ticketId) || ticketId <= 0) return false;
+  try {
+    const t = await prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      select: { userId: true },
+    });
+    return t !== null && t.userId === userId;
+  } catch {
+    return false;
+  }
 }

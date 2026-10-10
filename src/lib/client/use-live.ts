@@ -62,21 +62,46 @@ export type LiveNotificationEvent = {
   };
 };
 
+export type LiveTicketTypingEvent = {
+  event: 'ticket.typing';
+  ticketId: number;
+  fromAdmin: boolean;
+  timestamp: string;
+};
+
+export type LiveTicketPresenceEvent = {
+  event: 'ticket.presence';
+  adminOnline: boolean;
+  timestamp: string;
+};
+
+export type LiveTicketMessageEvent = {
+  event: 'ticket.message';
+  ticketId: number;
+  userId: number;
+  timestamp: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+};
+
 export function useLiveEvents(opts: {
   onSession?: (ev: LiveSessionEvent) => void;
   onBlast?: (ev: LiveBlastEvent) => void;
   onNotification?: (ev: LiveNotificationEvent) => void;
+  onTicketTyping?: (ev: LiveTicketTypingEvent) => void;
+  onTicketPresence?: (ev: LiveTicketPresenceEvent) => void;
+  onTicketMessage?: (ev: LiveTicketMessageEvent) => void;
   onPoll?: () => void;
   fallbackMs?: number;
   pollMs?: number;
   enabled?: boolean;
 }): { connected: boolean; reconnect: () => void } {
-  const { onSession, onBlast, onNotification, onPoll, fallbackMs = 8000, pollMs = 5000, enabled = true } = opts;
+  const { onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll, fallbackMs = 8000, pollMs = 5000, enabled = true } = opts;
   const [connected, setConnected] = useState(false);
   const [seq, setSeq] = useState(0);
-  const cbRef = useRef({ onSession, onBlast, onNotification, onPoll });
+  const cbRef = useRef({ onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll });
   useEffect(() => {
-    cbRef.current = { onSession, onBlast, onNotification, onPoll };
+    cbRef.current = { onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll };
   });
 
   useEffect(() => {
@@ -130,6 +155,30 @@ export function useLiveEvents(opts: {
         markAlive();
         try {
           cbRef.current.onNotification?.(JSON.parse((e as MessageEvent).data) as LiveNotificationEvent);
+        } catch {
+          // Abaikan.
+        }
+      });
+      source.addEventListener('ticket.typing', (e) => {
+        markAlive();
+        try {
+          cbRef.current.onTicketTyping?.(JSON.parse((e as MessageEvent).data) as LiveTicketTypingEvent);
+        } catch {
+          // Abaikan.
+        }
+      });
+      source.addEventListener('ticket.presence', (e) => {
+        markAlive();
+        try {
+          cbRef.current.onTicketPresence?.(JSON.parse((e as MessageEvent).data) as LiveTicketPresenceEvent);
+        } catch {
+          // Abaikan.
+        }
+      });
+      source.addEventListener('ticket.message', (e) => {
+        markAlive();
+        try {
+          cbRef.current.onTicketMessage?.(JSON.parse((e as MessageEvent).data) as LiveTicketMessageEvent);
         } catch {
           // Abaikan.
         }
