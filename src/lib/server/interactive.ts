@@ -84,7 +84,6 @@ export function toBaileysButton(b: NormalizedButton): unknown {
 }
 
 /** Header media opsional (buttons & buttonv2): hanya gambar. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadImageHeader(media: string): Promise<{ image: Buffer; mimetype: string }> {
   const loaded = await loadMedia({ media });
   if (!loaded.mimeType.startsWith('image/')) {

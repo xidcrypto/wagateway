@@ -33,7 +33,7 @@ function getPrisma(): PrismaClient {
  * Pemakaian tetap sama: `prisma.user.findMany()`.
  */
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop, _receiver) {
+  get(_target, prop) {
     const client = getPrisma();
     const value = Reflect.get(client as unknown as object, prop, client);
     if (typeof value === 'function') {

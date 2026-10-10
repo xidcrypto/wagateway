@@ -1,87 +1,59 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { Pencil, Plus, Square, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
-import { Select, TextInput } from '@/components/ui/Fields';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { toast } from '@/components/ui/Toast';
+import { StatusOrb } from '@/components/ui/StatusOrb';
+import { Avatar } from '@/components/ui/Avatar';
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
+import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
+import { ADMIN_PAGE, StatCard, errMsg, formatDateTime } from '@/components/admin/shared';
 import {
-  ApiError,
-  clearSiteInfoCache,
-  createAdminUser,
-  deleteAdminUser,
-  forceStopSession,
-  getAdminSettings,
   getAdminStats,
-  getMe,
-  listAdminSessions,
+  getStats,
   listAdminUsers,
-  patchAdminUser,
-  updateAdminSettings,
-  type AdminSession,
   type AdminStats,
   type AdminUser,
+  type StatsResponse,
 } from '@/lib/client/api';
 
-function errMsg(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
+function timeAgo(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return `${s} dtk lalu`;
+  if (s < 3600) return `${Math.floor(s / 60)} mnt lalu`;
+  if (s < 86400) return `${Math.floor(s / 3600)} jam lalu`;
+  return `${Math.floor(s / 86400)} hari lalu`;
 }
 
-export default function AdminPage() {
-  const [meId, setMeId] = useState<number | null>(null);
+export default function AdminOverviewPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [overview, setOverview] = useState<StatsResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [sessions, setSessions] = useState<AdminSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ username: '', email: '', fullName: '', password: '', role: 'user' });
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<AdminUser | null>(null);
-  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
-  const [editActive, setEditActive] = useState(true);
-  const [editPassword, setEditPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<AdminUser | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [siteName, setSiteName] = useState('');
-  const [siteTagline, setSiteTagline] = useState('');
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
-  const [savingSite, setSavingSite] = useState(false);
-
-  async function refreshAll(): Promise<void> {
-    const [s, u, ss, st] = await Promise.all([
-      getAdminStats(),
-      listAdminUsers(),
-      listAdminSessions(),
-      getAdminSettings(),
-    ]);
-    setStats(s);
-    setUsers(u.users);
-    setSessions(ss.sessions);
-    setSiteName(st.settings.site_name ?? '');
-    setSiteTagline(st.settings.site_tagline ?? '');
-    setSmtpConfigured(st.smtpConfigured);
-  }
+  const [error, setError] = useState<string | null>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getMe(), getAdminStats(), listAdminUsers(), listAdminSessions(), getAdminSettings()])
-      .then(([me, s, u, ss, st]) => {
-        if (!cancelled) {
-          setMeId(me.user.id);
-          setStats(s);
-          setUsers(u.users);
-          setSessions(ss.sessions);
-          setSiteName(st.settings.site_name ?? '');
-          setSiteTagline(st.settings.site_tagline ?? '');
-          setSmtpConfigured(st.smtpConfigured);
-        }
+    Promise.all([
+      getAdminStats(),
+      getStats().catch((e) => {
+        if (!cancelled) setChartError(errMsg(e, 'Gagal memuat grafik.'));
+        return null;
+      }),
+      listAdminUsers().catch(() => ({ users: [] as AdminUser[] })),
+    ])
+      .then(([s, ov, u]) => {
+        if (cancelled) return;
+        setStats(s);
+        if (ov) setOverview(ov);
+        setUsers(u.users);
       })
       .catch((e) => {
-        if (!cancelled) toast('error', errMsg(e, 'Gagal memuat data admin.'));
+        if (!cancelled) setError(errMsg(e, 'Gagal memuat ringkasan admin.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -91,349 +63,179 @@ export default function AdminPage() {
     };
   }, []);
 
-  async function handleAdd(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!addForm.username.trim() || !addForm.email.trim() || !addForm.fullName.trim()) {
-      toast('error', 'Username, email, dan nama lengkap wajib diisi.');
-      return;
-    }
-    if (addForm.password.length < 6) {
-      toast('error', 'Password minimal 6 karakter.');
-      return;
-    }
-    setAdding(true);
-    try {
-      await createAdminUser({
-        username: addForm.username.trim(),
-        email: addForm.email.trim(),
-        fullName: addForm.fullName.trim(),
-        password: addForm.password,
-        role: addForm.role === 'admin' ? 'admin' : 'user',
-      });
-      toast('success', 'User dibuat.');
-      setAddForm({ username: '', email: '', fullName: '', password: '', role: 'user' });
-      setShowAdd(false);
-      await refreshAll();
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal membuat user.'));
-    } finally {
-      setAdding(false);
-    }
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4" aria-label="Memuat ringkasan admin">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+        <Skeleton className="h-64" />
+      </div>
+    );
   }
 
-  function openEdit(u: AdminUser): void {
-    setEditing(u);
-    setEditRole(u.role);
-    setEditActive(u.active);
-    setEditPassword('');
+  if (error && !stats) {
+    return (
+      <ErrorState
+        message="Gagal memuat ringkasan admin."
+        hint={error}
+        onRetry={() => window.location.reload()}
+      />
+    );
   }
 
-  async function handleSaveEdit(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!editing) return;
-    setSaving(true);
-    try {
-      const body: { role: 'admin' | 'user'; active: boolean; password?: string } = {
-        role: editRole,
-        active: editActive,
-      };
-      if (editPassword) {
-        if (editPassword.length < 6) {
-          toast('error', 'Password baru minimal 6 karakter.');
-          setSaving(false);
-          return;
-        }
-        body.password = editPassword;
-      }
-      await patchAdminUser(editing.id, body);
-      toast('success', 'User diubah.');
-      setEditing(null);
-      await refreshAll();
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal mengubah user.'));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const msg = stats?.messages ?? { total: 0, in: 0, out: 0, today: 0 };
+  const sessionsList = overview?.sessionsList ?? [];
+  const totalSessions = stats?.sessions.total ?? sessionsList.length;
+  const openCount = stats?.sessions.open ?? 0;
 
-  async function handleDelete(): Promise<void> {
-    if (!deleting) return;
-    setBusy(true);
-    try {
-      await deleteAdminUser(deleting.id);
-      toast('success', 'User dihapus.');
-      setDeleting(null);
-      await refreshAll();
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal menghapus user.'));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const byStatus = new Map<string, number>();
+  for (const s of sessionsList) byStatus.set(s.status, (byStatus.get(s.status) ?? 0) + 1);
+  const statusRows = [...byStatus.entries()].sort((a, b) => b[1] - a[1]);
 
-  async function handleForceStop(s: AdminSession): Promise<void> {
-    setBusy(true);
-    try {
-      await forceStopSession(s.id, false);
-      toast('success', `Session "${s.label}" dihentikan (kredensial disimpan).`);
-      await refreshAll();
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal menghentikan session.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleSaveSite(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!siteName.trim()) {
-      toast('error', 'Nama web wajib diisi.');
-      return;
-    }
-    setSavingSite(true);
-    try {
-      const r = await updateAdminSettings({
-        site_name: siteName.trim(),
-        site_tagline: siteTagline.trim(),
-      });
-      setSiteName(r.settings.site_name ?? siteName.trim());
-      setSiteTagline(r.settings.site_tagline ?? '');
-      clearSiteInfoCache();
-      toast('success', 'Pengaturan web disimpan.');
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal menyimpan pengaturan web.'));
-    } finally {
-      setSavingSite(false);
-    }
-  }
-
-  if (loading) return <p className="text-zinc-400">Memuat…</p>;
+  const newestUsers = [...users].sort((a, b) => b.id - a.id).slice(0, 5);
+  const recent = (overview?.recent ?? []).slice(0, 7);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-50">Admin</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Statistik sistem, kelola user, dan semua session.
-          </p>
-        </div>
-        <Button onClick={() => setShowAdd(true)}>
-          <span className="flex items-center gap-1"><Plus size={16} /> User</span>
-        </Button>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Pengguna"
+          value={stats?.users.total ?? 0}
+          sub={`${stats?.users.admins ?? 0} admin · ${stats?.users.regular ?? 0} user`}
+        />
+        <StatCard
+          label="Session"
+          value={stats?.sessions.total ?? 0}
+          sub={`${openCount} terhubung`}
+        />
+        <StatCard label="Pesan" value={msg.total} sub={`${msg.in} masuk · ${msg.out} keluar`} />
+        <StatCard label="Pesan hari ini" value={msg.today} sub="24 jam terakhir" />
       </div>
 
-      {stats ? (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <Card title="User">
-            <p className="text-2xl font-bold text-zinc-50">{stats.users.total}</p>
-            <p className="text-xs text-zinc-500">
-              {stats.users.admins} admin · {stats.users.regular} user
-            </p>
-          </Card>
-          <Card title="Session">
-            <p className="text-2xl font-bold text-zinc-50">{stats.sessions.total}</p>
-            <p className="text-xs text-zinc-500">{stats.sessions.open} open</p>
-          </Card>
-          <Card title="Pesan">
-            <p className="text-2xl font-bold text-zinc-50">{stats.messages.total}</p>
-            <p className="text-xs text-zinc-500">
-              {stats.messages.in} masuk · {stats.messages.out} keluar
-            </p>
-          </Card>
-          <Card title="Hari ini">
-            <p className="text-2xl font-bold text-zinc-50">{stats.messages.today}</p>
-            <p className="text-xs text-zinc-500">pesan</p>
-          </Card>
-        </div>
-      ) : null}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card
+          title="Pesan 7 hari terakhir"
+          className="xl:col-span-2"
+          action={<StatusBadge status={`${msg.total} total`} />}
+        >
+          {chartError && !overview ? (
+            <ErrorState
+              message="Gagal memuat grafik."
+              hint={chartError}
+              onRetry={() => window.location.reload()}
+            />
+          ) : overview && overview.daily.length > 0 ? (
+            <WeeklyChart daily={overview.daily} />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">Belum ada data.</p>
+          )}
+        </Card>
 
-      <Card title="Pengaturan web">
-        <form onSubmit={(e) => void handleSaveSite(e)} className="flex flex-col gap-3">
-          <TextInput
-            label="Nama web"
-            value={siteName}
-            onChange={(e) => setSiteName(e.target.value)}
-            maxLength={64}
-            required
-            placeholder="Pansa Gateway"
-          />
-          <TextInput
-            label="Tagline (tampil di login & judul browser)"
-            value={siteTagline}
-            onChange={(e) => setSiteTagline(e.target.value)}
-            maxLength={255}
-            placeholder="Gateway WhatsApp multi-user"
-          />
-          <p className="text-xs text-zinc-500">
-            Nama web tampil di sidebar, halaman login, judul browser, dan email reset password.
-            {smtpConfigured ? '' : ' SMTP belum dikonfigurasi — email reset password belum bisa dikirim.'}
-          </p>
-          <div>
-            <Button type="submit" disabled={savingSite}>
-              {savingSite ? 'Menyimpan…' : 'Simpan pengaturan web'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <Card title={`User (${users.length})`}>
-        <ul className="flex flex-col gap-1">
-          {users.map((u) => (
-            <li
-              key={u.id}
-              className="flex items-center justify-between gap-2 rounded-lg bg-zinc-950 px-3 py-2"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-zinc-100">
-                  {u.username}
-                  {meId === u.id ? <span className="text-xs text-zinc-500"> (kamu)</span> : null}
-                </span>
-                <span className="block truncate text-xs text-zinc-500">
-                  {u.email} · {u.role}{u.active ? '' : ' · nonaktif'}
-                </span>
-              </span>
-              <span className="flex shrink-0 gap-1">
-                <Button variant="secondary" onClick={() => openEdit(u)}>
-                  <span className="flex items-center gap-1 text-xs"><Pencil size={12} /> Ubah</span>
-                </Button>
-                <Button variant="danger" disabled={meId === u.id} onClick={() => setDeleting(u)}>
-                  <span className="flex items-center gap-1 text-xs"><Trash2 size={12} /> Hapus</span>
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <Card title={`Semua session (${sessions.length})`}>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-zinc-400">Belum ada session.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {sessions.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-zinc-950 px-3 py-2"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-zinc-100">
-                    {s.label}{s.phone ? ` · ${s.phone}` : ''}
+        <Card
+          title="Status session"
+          action={
+            <Link href="/admin/sessions" className="text-sm font-semibold text-primary hover:text-primary-hover">
+              Semua →
+            </Link>
+          }
+        >
+          {statusRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Belum ada session.</p>
+          ) : (
+            <ul className="flex flex-col">
+              {statusRows.map(([status, count]) => (
+                <li
+                  key={status}
+                  className="flex items-center gap-2.5 border-b border-border/60 py-2 last:border-0"
+                >
+                  <StatusOrb status={status} size={8} />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    <StatusBadge status={status} />
                   </span>
-                  <span className="block truncate text-xs text-zinc-500">
-                    {s.owner ? `@${s.owner.username}` : '(tanpa owner)'}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <StatusBadge status={s.status} />
-                  {s.status !== 'stopped' && s.status !== 'logged_out' ? (
-                    <Button variant="secondary" disabled={busy} onClick={() => void handleForceStop(s)}>
-                      <span className="flex items-center gap-1 text-xs"><Square size={12} /> Stop</span>
-                    </Button>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      {showAdd ? (
-        <Modal title="Tambah user" onClose={() => setShowAdd(false)}>
-          <form onSubmit={(e) => void handleAdd(e)} className="flex flex-col gap-3">
-            <TextInput
-              label="Username"
-              value={addForm.username}
-              onChange={(e) => setAddForm({ ...addForm, username: e.target.value })}
-              maxLength={32}
-              required
-            />
-            <TextInput
-              label="Email"
-              type="email"
-              value={addForm.email}
-              onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
-              required
-            />
-            <TextInput
-              label="Nama lengkap"
-              value={addForm.fullName}
-              onChange={(e) => setAddForm({ ...addForm, fullName: e.target.value })}
-              maxLength={255}
-              required
-            />
-            <TextInput
-              label="Password (min 6)"
-              type="password"
-              value={addForm.password}
-              onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
-              required
-            />
-            <Select
-              label="Role"
-              value={addForm.role}
-              onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}
-            >
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </Select>
-            <Button type="submit" disabled={adding}>
-              {adding ? 'Membuat…' : 'Buat user'}
-            </Button>
-          </form>
-        </Modal>
-      ) : null}
-
-      {editing ? (
-        <Modal title={`Ubah ${editing.username}`} onClose={() => setEditing(null)}>
-          <form onSubmit={(e) => void handleSaveEdit(e)} className="flex flex-col gap-3">
-            <Select
-              label="Role"
-              value={editRole}
-              onChange={(e) => setEditRole(e.target.value === 'admin' ? 'admin' : 'user')}
-            >
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </Select>
-            <Select
-              label="Status"
-              value={editActive ? 'active' : 'inactive'}
-              onChange={(e) => setEditActive(e.target.value === 'active')}
-            >
-              <option value="active">aktif</option>
-              <option value="inactive">nonaktif</option>
-            </Select>
-            <TextInput
-              label="Password baru (kosongkan = tidak diubah)"
-              type="password"
-              value={editPassword}
-              onChange={(e) => setEditPassword(e.target.value)}
-            />
-            {meId === editing.id ? (
-              <p className="text-xs text-amber-300">
-                Ini akunmu sendiri: role admin tidak bisa dicabut dan akun tidak bisa dinonaktifkan.
-              </p>
-            ) : null}
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Menyimpan…' : 'Simpan'}
-            </Button>
-          </form>
-        </Modal>
-      ) : null}
-
-      {deleting ? (
-        <Modal title="Hapus user?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-zinc-300">
-            Hapus <b>{deleting.username}</b> ({deleting.email})? Session miliknya tidak ikut terhapus.
+                  <span className="tnum text-sm font-semibold">{count.toLocaleString('id-ID')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="tnum mt-2 text-xs text-muted-foreground">
+            {openCount} dari {totalSessions} terhubung
           </p>
-          <div className="mt-4 flex gap-2">
-            <Button variant="secondary" onClick={() => setDeleting(null)}>Batal</Button>
-            <Button variant="danger" disabled={busy} onClick={() => void handleDelete()}>
-              Ya, hapus
-            </Button>
-          </div>
-        </Modal>
-      ) : null}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card
+          title={`Pengguna terbaru (${Math.min(ADMIN_PAGE, newestUsers.length)})`}
+          className="xl:col-span-2"
+          action={
+            <Link href="/admin/users" className="text-sm font-semibold text-primary hover:text-primary-hover">
+              Semua →
+            </Link>
+          }
+        >
+          {newestUsers.length === 0 ? (
+            <EmptyState title="Belum ada pengguna" hint="Tambah pengguna di halaman Pengguna." />
+          ) : (
+            <ul className="flex flex-col">
+              {newestUsers.map((u) => (
+                <li
+                  key={u.id}
+                  className="flex items-center gap-2.5 border-b border-border/60 py-2 last:border-0"
+                >
+                  <Avatar name={u.fullName || u.username} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{u.username}</p>
+                    <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                  </div>
+                  <StatusBadge status={u.role} />
+                  <span className="tnum hidden text-xs text-muted-foreground sm:inline">
+                    {formatDateTime(u.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card
+          title="Aktivitas terakhir"
+          action={
+            <Link href="/admin/audit" className="text-sm font-semibold text-primary hover:text-primary-hover">
+              Semua →
+            </Link>
+          }
+        >
+          {recent.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Belum ada aktivitas.</p>
+          ) : (
+            <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+              {recent.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-start gap-2.5 rounded-control px-2 py-1.5 hover:bg-muted/50"
+                >
+                  <span
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: m.direction === 'in' ? 'var(--status-open)' : 'var(--primary)' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] text-foreground">
+                      {m.textBody || `(${m.msgType})`}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {m.session?.label ?? m.sessionId} · {m.remoteJid} · {timeAgo(m.createdAt)}
+                    </p>
+                  </div>
+                  <StatusBadge status={m.direction} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

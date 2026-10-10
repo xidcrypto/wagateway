@@ -2,184 +2,328 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import {
-  Inbox,
-  MessageSquare,
-  Send,
-  Smartphone,
-  Users,
-  Wifi,
-} from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Smartphone, Wifi } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StatusOrb } from '@/components/ui/StatusOrb';
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
+import { Button } from '@/components/ui/Button';
+import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
+import { MessageDonut } from '@/components/dashboard/MessageDonut';
+import { useCountUp, useSpotlight } from '@/lib/client/use-effects';
 import {
   ApiError,
-  countSessionMessages,
-  getAdminStats,
   getMe,
-  listSessions,
-  type AdminStats,
-  type SessionItem,
+  getStats,
+  type StatsResponse,
 } from '@/lib/client/api';
 
-type StatCard = {
+function StatCard({
+  label,
+  value,
+  sub,
+  icon,
+  accent,
+}: {
   label: string;
-  value: string;
+  value: number;
+  sub: string;
   icon: React.ReactNode;
-};
-
-function StatGrid({ cards }: { cards: StatCard[] }) {
+  accent: string;
+}) {
+  const shown = useCountUp(value);
+  const ref = useSpotlight<HTMLDivElement>();
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-      {cards.map((c) => (
-        <div
-          key={c.label}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4"
-        >
-          <div className="flex items-center gap-2 text-zinc-400">
-            {c.icon}
-            <span className="text-xs">{c.label}</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-zinc-50">{c.value}</p>
-        </div>
-      ))}
+    <div
+      ref={ref}
+      className="spotlight rounded-card border border-border bg-card p-4 shadow-1"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] text-muted-foreground">{label}</span>
+        <span style={{ color: accent }}>{icon}</span>
+      </div>
+      <p className="tnum font-display mt-2 text-3xl font-bold">{shown.toLocaleString('id-ID')}</p>
+      <p className="tnum mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
+}
+
+function timeAgo(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return `${s} dtk lalu`;
+  if (s < 3600) return `${Math.floor(s / 60)} mnt lalu`;
+  if (s < 86400) return `${Math.floor(s / 3600)} jam lalu`;
+  return `${Math.floor(s / 86400)} hari lalu`;
+}
+
+function statusText(status: string): string {
+  switch (status) {
+    case 'open':
+      return 'Terhubung';
+    case 'qr':
+      return 'Menunggu scan QR';
+    case 'pairing':
+      return 'Menunggu kode pairing';
+    case 'connecting':
+      return 'Menghubungkan';
+    case 'closed':
+      return 'Terputus';
+    case 'stopped':
+      return 'Dihentikan';
+    case 'logged_out':
+      return 'Keluar';
+    default:
+      return status;
+  }
 }
 
 export default function DashboardPage() {
   const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [name, setName] = useState('');
-  const [sessions, setSessions] = useState<SessionItem[]>([]);
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [msgIn, setMsgIn] = useState<number | null>(null);
-  const [msgOut, setMsgOut] = useState<number | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function load(): Promise<void> {
+    setError(null);
+    try {
+      const me = await getMe();
+      setRole(me.user.role);
+      setName(me.user.fullName);
+      const s = await getStats();
+      setStats(s);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Gagal memuat data.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
-    async function load(): Promise<void> {
+    (async () => {
       try {
         const me = await getMe();
         if (cancelled) return;
         setRole(me.user.role);
         setName(me.user.fullName);
-
-        const sessRes = await listSessions();
-        if (cancelled) return;
-        setSessions(sessRes.sessions);
-
-        if (me.user.role === 'admin') {
-          // Admin: statistik sistem langsung dari /api/admin/stats.
-          const s = await getAdminStats();
-          if (!cancelled) setStats(s);
-        } else {
-          // User biasa: agregasi total pesan masuk/keluar dari tiap session miliknya.
-          let totalIn = 0;
-          let totalOut = 0;
-          for (const s of sessRes.sessions) {
-            const [cIn, cOut] = await Promise.all([
-              countSessionMessages(s.id, 'in'),
-              countSessionMessages(s.id, 'out'),
-            ]);
-            totalIn += cIn;
-            totalOut += cOut;
-          }
-          if (!cancelled) {
-            setMsgIn(totalIn);
-            setMsgOut(totalOut);
-          }
-        }
+        const s = await getStats();
+        if (!cancelled) setStats(s);
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : 'Gagal memuat data.');
-        }
+        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Gagal memuat data.');
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-    void load();
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const today = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   if (loading) {
-    return <p className="text-zinc-400">Memuat…</p>;
+    return (
+      <div className="flex flex-col gap-4" aria-label="Memuat dashboard">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <Skeleton className="h-72 xl:col-span-2" />
+          <Skeleton className="h-72" />
+        </div>
+        <Skeleton className="h-48" />
+      </div>
+    );
   }
 
-  const openCount = sessions.filter((s) => s.status === 'open').length;
+  if (error && !stats) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="font-display text-2xl font-bold">Dashboard</h1>
+        <ErrorState
+          message="Gagal memuat dashboard."
+          hint={error}
+          onRetry={() => {
+            setLoading(true);
+            void load();
+          }}
+        />
+      </div>
+    );
+  }
 
-  const cards: StatCard[] =
-    role === 'admin' && stats
-      ? [
-          { label: 'Session', value: String(stats.sessions.total), icon: <Smartphone size={16} /> },
-          { label: 'Session open', value: String(stats.sessions.open), icon: <Wifi size={16} /> },
-          { label: 'Pesan masuk', value: String(stats.messages.in), icon: <Inbox size={16} /> },
-          { label: 'Pesan keluar', value: String(stats.messages.out), icon: <Send size={16} /> },
-          { label: 'Pesan hari ini', value: String(stats.messages.today), icon: <MessageSquare size={16} /> },
-          { label: 'Pengguna', value: String(stats.users.total), icon: <Users size={16} /> },
-        ]
-      : [
-          { label: 'Session saya', value: String(sessions.length), icon: <Smartphone size={16} /> },
-          { label: 'Session open', value: String(openCount), icon: <Wifi size={16} /> },
-          { label: 'Pesan masuk', value: msgIn === null ? '–' : String(msgIn), icon: <Inbox size={16} /> },
-          { label: 'Pesan keluar', value: msgOut === null ? '–' : String(msgOut), icon: <Send size={16} /> },
-        ];
+  const sessions = stats?.sessionsList ?? [];
+  const totalSessions = stats?.sessions.total ?? sessions.length;
+  const openCount = stats?.sessions.open ?? 0;
+  const msg = stats?.messages ?? { total: 0, in: 0, out: 0, today: 0 };
+
+  const connectedRate = totalSessions > 0 ? Math.round((openCount / totalSessions) * 100) : 0;
+
+  const cards = [
+    {
+      label: role === 'admin' ? 'Session' : 'Session saya',
+      value: totalSessions,
+      sub: `${openCount} terhubung · ${connectedRate}%`,
+      icon: <Smartphone size={16} />,
+      accent: 'var(--status-qr)',
+    },
+    {
+      label: 'Pesan hari ini',
+      value: msg.today,
+      sub: '24 jam terakhir',
+      icon: <CalendarDays size={16} />,
+      accent: 'var(--primary)',
+    },
+    {
+      label: 'Pesan masuk',
+      value: msg.in,
+      sub: `dari ${totalSessions} session`,
+      icon: <ArrowDownLeft size={16} />,
+      accent: 'var(--status-open)',
+    },
+    {
+      label: 'Pesan keluar',
+      value: msg.out,
+      sub: `dari ${totalSessions} session`,
+      icon: <ArrowUpRight size={16} />,
+      accent: 'var(--primary)',
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-bold text-zinc-50">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          {name ? `Halo, ${name}` : 'Ringkasan gateway WhatsApp'}
+        <p className="text-[13px] text-muted-foreground">{today}</p>
+        <h1 className="font-display mt-0.5 text-2xl font-bold">
+          {name ? `Selamat datang kembali, ${name.split(' ')[0]}` : 'Dashboard'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Ini yang sedang terjadi: {msg.today} pesan hari ini · {openCount} dari {totalSessions} session terhubung.
         </p>
       </div>
 
       {error ? (
-        <p role="alert" className="rounded-lg bg-red-950 px-3 py-2 text-sm text-red-300">
-          {error}
-        </p>
+        <ErrorState message="Sebagian data gagal dimuat." hint={error} onRetry={() => void load()} />
       ) : null}
 
-      <StatGrid cards={cards} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((c) => (
+          <StatCard key={c.label} {...c} />
+        ))}
+      </div>
 
-      <Card
-        title={`Session WhatsApp (${sessions.length})`}
-        action={
-          <Link href="/sessions" className="text-sm font-semibold text-emerald-400 hover:text-emerald-300">
-            Kelola →
-          </Link>
-        }
-      >
-        {sessions.length === 0 ? (
-          <p className="text-sm text-zinc-400">
-            Belum ada session.{' '}
-            <Link href="/sessions" className="font-semibold text-emerald-400 hover:text-emerald-300">
-              Buat session pertama
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card
+          title="Pesan 7 hari terakhir"
+          className="xl:col-span-2"
+          action={<StatusBadge status={`${msg.total} total`} />}
+        >
+          {stats && stats.daily.length > 0 ? (
+            <WeeklyChart daily={stats.daily} />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">Belum ada data.</p>
+          )}
+        </Card>
+
+        <Card title="Komposisi pesan">
+          <MessageDonut inbound={msg.in} outbound={msg.out} />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card
+          title={`Session WhatsApp (${totalSessions})`}
+          className="xl:col-span-2"
+          action={
+            <Link href="/sessions" className="text-sm font-semibold text-primary hover:text-primary-hover">
+              Kelola →
             </Link>
-            .
+          }
+        >
+          {sessions.length === 0 ? (
+            <EmptyState
+              title="Belum ada session"
+              hint="Buat session pertamamu, lalu tautkan perangkat dengan scan QR atau kode pairing."
+              action={
+                <Link href="/sessions">
+                  <Button>Buat session</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {sessions.slice(0, 6).map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center gap-3 rounded-control border border-border bg-background px-3 py-2.5"
+                >
+                  <StatusOrb status={s.status} size={12} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{s.label}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {s.phone ?? 'belum tersambung'} · {statusText(s.status)}
+                    </p>
+                  </div>
+                  <StatusBadge status={s.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <Wifi size={14} />
+            {openCount} terhubung dari {totalSessions} session
           </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {sessions.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-100">{s.label}</p>
-                  <p className="text-xs text-zinc-500">
-                    {s.phone ?? 'belum tersambung'}
-                  </p>
-                </div>
-                <StatusBadge status={s.status} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+        </Card>
+
+        <Card
+          title="Aktivitas terakhir"
+          action={
+            <Link href="/messages" className="text-sm font-semibold text-primary hover:text-primary-hover">
+              Semua →
+            </Link>
+          }
+        >
+          {!stats || stats.recent.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Belum ada aktivitas.
+            </p>
+          ) : (
+            <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+              {stats.recent.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-start gap-2.5 rounded-control px-2 py-1.5 hover:bg-muted/50"
+                >
+                  <span
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: m.direction === 'in' ? 'var(--status-open)' : 'var(--primary)' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] text-foreground">
+                      {m.textBody || `(${m.msgType})`}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {m.session?.label ?? m.sessionId} · {m.remoteJid} · {timeAgo(m.createdAt)}
+                    </p>
+                  </div>
+                  <StatusBadge status={m.direction} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

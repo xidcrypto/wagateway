@@ -429,6 +429,221 @@ export function sendText(
   });
 }
 
+export type SendResult = { messageId: string; to: string; status: string };
+
+function postSend(
+  sessionId: string,
+  kind: string,
+  body: Record<string, unknown>,
+): Promise<SendResult> {
+  return api<SendResult>(`/api/sessions/${encodeURIComponent(sessionId)}/send/${kind}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export type SendButton = {
+  type?: 'reply' | 'url' | 'copy' | 'call';
+  id?: string;
+  text?: string;
+  url?: string;
+  copy?: string;
+  call?: string;
+};
+
+/** Kirim gambar (media: URL, data URI, atau path lokal di server). */
+export function sendImage(
+  sessionId: string,
+  to: string,
+  media: string,
+  caption?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'image', { to, media, caption: caption || undefined });
+}
+
+/** Kirim video (gif: true untuk GIF). */
+export function sendVideo(
+  sessionId: string,
+  to: string,
+  media: string,
+  caption?: string,
+  gif?: boolean,
+): Promise<SendResult> {
+  return postSend(sessionId, 'video', {
+    to,
+    media,
+    caption: caption || undefined,
+    gif: gif || undefined,
+  });
+}
+
+/** Kirim audio (ptt: true untuk voice note). */
+export function sendAudio(
+  sessionId: string,
+  to: string,
+  media: string,
+  ptt?: boolean,
+): Promise<SendResult> {
+  return postSend(sessionId, 'audio', { to, media, ptt: ptt || undefined });
+}
+
+/** Kirim dokumen (wajib webp untuk stiker). */
+export function sendDocument(
+  sessionId: string,
+  to: string,
+  media: string,
+  caption?: string,
+  filename?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'document', {
+    to,
+    media,
+    caption: caption || undefined,
+    filename: filename || undefined,
+  });
+}
+
+/** Kirim stiker (media wajib image/webp). */
+export function sendSticker(sessionId: string, to: string, media: string): Promise<SendResult> {
+  return postSend(sessionId, 'sticker', { to, media });
+}
+
+/** Kirim lokasi. */
+export function sendLocation(
+  sessionId: string,
+  to: string,
+  latitude: number,
+  longitude: number,
+  name?: string,
+  address?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'location', {
+    to,
+    latitude,
+    longitude,
+    name: name || undefined,
+    address: address || undefined,
+  });
+}
+
+/** Kirim kontak (vCard). */
+export function sendContact(
+  sessionId: string,
+  to: string,
+  displayName: string,
+  phone?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'contact', {
+    to,
+    contact: { displayName, phone: phone || undefined },
+  });
+}
+
+/** Kirim polling (single choice, 2–12 opsi). */
+export function sendPoll(
+  sessionId: string,
+  to: string,
+  question: string,
+  options: string[],
+): Promise<SendResult> {
+  return postSend(sessionId, 'poll', { to, question, options });
+}
+
+/** Kirim tombol interaktif (reply/url/copy/call, maks 10, header gambar opsional). */
+export function sendButtons(
+  sessionId: string,
+  to: string,
+  text: string,
+  buttons: SendButton[],
+  footer?: string,
+  media?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'buttons', {
+    to,
+    text,
+    buttons,
+    footer: footer || undefined,
+    media: media || undefined,
+  });
+}
+
+/** Kirim tombol quick-reply klasik (hanya reply, maks 3). */
+export function sendButtonV2(
+  sessionId: string,
+  to: string,
+  text: string,
+  buttons: Array<{ id: string; text: string }>,
+  footer?: string,
+  media?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'buttonv2', {
+    to,
+    text,
+    buttons,
+    footer: footer || undefined,
+    media: media || undefined,
+  });
+}
+
+export type SendListSection = {
+  title?: string;
+  rows: Array<{ title: string; description?: string }>;
+};
+
+/** Kirim list (sections + rows, maks 10 section). */
+export function sendList(
+  sessionId: string,
+  to: string,
+  text: string,
+  sections: SendListSection[],
+  title?: string,
+  buttonText?: string,
+  footer?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'list', {
+    to,
+    text,
+    sections,
+    title: title || undefined,
+    buttonText: buttonText || undefined,
+    footer: footer || undefined,
+  });
+}
+
+export type SendCarouselCard = {
+  image?: string;
+  video?: string;
+  caption?: string;
+  title?: string;
+  subtitle?: string;
+  footer?: string;
+  buttons: SendButton[];
+};
+
+/** Kirim carousel (1–10 card, tiap card wajib gambar/video). */
+export function sendCarousel(
+  sessionId: string,
+  to: string,
+  cards: SendCarouselCard[],
+  text?: string,
+  footer?: string,
+): Promise<SendResult> {
+  return postSend(sessionId, 'carousel', {
+    to,
+    cards,
+    text: text || undefined,
+    footer: footer || undefined,
+  });
+}
+
+/** Kirim email tes SMTP (admin). */
+export function sendSettingsTestEmail(to: string): Promise<{ sent: boolean; message: string }> {
+  return api<{ sent: boolean; message: string }>('/api/admin/settings/test', {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
+}
+
 export type MessageFilter = {
   remoteJid?: string;
   direction?: '' | 'in' | 'out';
@@ -703,8 +918,18 @@ export type AdminSession = {
   updatedAt: string;
 };
 
-export function listAdminSessions(): Promise<{ sessions: AdminSession[]; total: number }> {
-  return api('/api/admin/sessions?limit=100');
+export function listAdminSessions(filter?: {
+  status?: string;
+  ownerId?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<{ sessions: AdminSession[]; total: number; limit: number; offset: number }> {
+  const params = new URLSearchParams();
+  if (filter?.status) params.set('status', filter.status);
+  if (filter?.ownerId) params.set('owner_id', String(filter.ownerId));
+  params.set('limit', String(filter?.limit ?? 100));
+  params.set('offset', String(filter?.offset ?? 0));
+  return api(`/api/admin/sessions?${params.toString()}`);
 }
 
 export function forceStopSession(
@@ -715,6 +940,51 @@ export function forceStopSession(
     method: 'POST',
     body: JSON.stringify({ logout }),
   });
+}
+
+export type AdminAuditMessage = {
+  id: string;
+  sessionId: string;
+  direction: 'in' | 'out';
+  waId: string | null;
+  remoteJid: string;
+  msgType: string;
+  textBody: string | null;
+  status: string | null;
+  createdAt: string;
+  session: {
+    id: string;
+    label: string;
+    ownerId: number | null;
+    owner: { id: number; username: string } | null;
+  } | null;
+};
+
+export type AdminAuditFilter = {
+  q?: string;
+  direction?: '' | 'in' | 'out';
+  status?: string;
+  remoteJid?: string;
+  sessionId?: string;
+  ownerId?: number;
+  limit?: number;
+  offset?: number;
+};
+
+/** Audit pesan lintas user (admin saja). */
+export function listAdminMessages(
+  filter: AdminAuditFilter,
+): Promise<{ messages: AdminAuditMessage[]; total: number; limit: number; offset: number }> {
+  const params = new URLSearchParams();
+  if (filter.q) params.set('q', filter.q);
+  if (filter.direction) params.set('direction', filter.direction);
+  if (filter.status) params.set('status', filter.status);
+  if (filter.remoteJid) params.set('remote_jid', filter.remoteJid);
+  if (filter.sessionId) params.set('session_id', filter.sessionId);
+  if (filter.ownerId) params.set('owner_id', String(filter.ownerId));
+  params.set('limit', String(filter.limit ?? 20));
+  params.set('offset', String(filter.offset ?? 0));
+  return api(`/api/admin/messages?${params.toString()}`);
 }
 
 export type MeUser = {

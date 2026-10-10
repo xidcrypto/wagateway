@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import Image from 'next/image';
+import { motion } from 'motion/react';
 import { Ban, CheckCircle2, Search, Undo2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Select, TextInput } from '@/components/ui/Fields';
+import { Avatar } from '@/components/ui/Avatar';
+import { EmptyState } from '@/components/ui/States';
+import { TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
 import {
   ApiError,
@@ -27,6 +29,7 @@ function errMsg(err: unknown, fallback: string): string {
 export default function ContactsPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [sessionId, setSessionId] = useState('');
+  const [tab, setTab] = useState<'cek' | 'blokir'>('cek');
   const [number, setNumber] = useState('');
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckNumberResult | null>(null);
@@ -63,7 +66,6 @@ export default function ContactsPage() {
         if (!cancelled) setBlocklist(r.blocklist);
       })
       .catch(() => {
-        // Session belum open → blocklist kosong, jangan spam toast tiap ganti session.
         if (!cancelled) setBlocklist([]);
       });
     return () => {
@@ -91,7 +93,7 @@ export default function ContactsPage() {
       setResult(first);
       if (!first) toast('info', 'Tidak ada hasil dari WhatsApp.');
     } catch (err) {
-      toast('error', errMsg(err, 'Gagal memeriksa nomor. Session mungkin belum open.'));
+      toast('error', errMsg(err, 'Gagal memeriksa nomor. Session mungkin belum terhubung.'));
     } finally {
       setChecking(false);
     }
@@ -140,7 +142,7 @@ export default function ContactsPage() {
       toast('error', 'Pilih session dulu.');
       return;
     }
-    const target = (blockInput.trim() || number.trim());
+    const target = blockInput.trim() || number.trim();
     if (!target) {
       toast('error', 'Isi nomor yang mau diblokir.');
       return;
@@ -176,132 +178,148 @@ export default function ContactsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-50">Kontak</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Cek nomor WhatsApp, lihat foto & about, kelola blocklist.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="font-display text-2xl font-bold">Kontak</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cek nomor WhatsApp, lihat foto & about, kelola blocklist.
+          </p>
+        </div>
+        <div className="w-full max-w-64">
+          <Select
+            aria-label="Session"
+            value={sessionId}
+            onChange={(e) => {
+              setSessionId(e.target.value);
+              setResult(null);
+              setPhotoUrl(null);
+              setAbout(null);
+            }}
+          >
+            {sessions.length === 0 ? <option value="">Belum ada session</option> : null}
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label} ({s.status}{s.phone ? ` · ${s.phone}` : ''})
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
 
-      <Select
-        label="Session"
-        value={sessionId}
-        onChange={(e) => {
-          setSessionId(e.target.value);
-          setResult(null);
-          setPhotoUrl(null);
-          setAbout(null);
-        }}
-      >
-        {sessions.length === 0 ? <option value="">Belum ada session</option> : null}
-        {sessions.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label} ({s.status}{s.phone ? ` · ${s.phone}` : ''})
-          </option>
-        ))}
-      </Select>
-
       {session && session.status !== 'open' ? (
-        <p role="alert" className="rounded-lg bg-amber-950 px-3 py-2 text-sm text-amber-300">
-          Session belum open (status: {session.status}). Cek nomor butuh koneksi aktif.
+        <p role="alert" className="rounded-control border border-status-connecting/40 bg-status-connecting/10 px-3 py-2 text-sm">
+          Session belum terhubung (status: {session.status}). Cek nomor butuh koneksi aktif.
         </p>
       ) : null}
 
-      <Card title="Cek nomor">
-        <form onSubmit={(e) => void handleCheck(e)} className="flex gap-2">
-          <div className="min-w-0 flex-1">
-            <TextInput
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              placeholder="62812…"
-              inputMode="tel"
-              aria-label="Nomor WhatsApp"
-            />
-          </div>
-          <Button type="submit" disabled={checking || !sessionId}>
-            <span className="flex items-center gap-1">
-              <Search size={16} /> {checking ? 'Mengecek…' : 'Cek'}
-            </span>
-          </Button>
-        </form>
+      <TabList
+        tabs={[
+          { value: 'cek', label: 'Cek nomor' },
+          { value: 'blokir', label: `Blocklist (${blocklist.length})` },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as 'cek' | 'blokir')}
+      />
 
-        {result ? (
-          <div className="mt-3 flex flex-col gap-3 rounded-xl bg-zinc-950 px-3 py-2">
-            <p className="flex items-center gap-2 text-sm">
-              {result.exists ? (
-                <span className="flex items-center gap-1 text-emerald-300">
-                  <CheckCircle2 size={16} /> Terdaftar di WhatsApp
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-red-300">
-                  <XCircle size={16} /> Tidak terdaftar
-                </span>
-              )}
-            </p>
-            <p className="break-all text-xs text-zinc-500">{result.jid ?? '(tanpa JID)'}</p>
-            {result.exists ? (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" disabled={photoLoading} onClick={() => void handlePhoto()}>
-                  {photoLoading ? 'Memuat foto…' : 'Lihat foto'}
-                </Button>
-                <Button variant="secondary" disabled={aboutLoading} onClick={() => void handleAbout()}>
-                  {aboutLoading ? 'Memuat…' : 'Lihat about'}
-                </Button>
-              </div>
-            ) : null}
-            {photoUrl ? (
-              <Image
-                src={photoUrl}
-                alt="Foto profil kontak"
-                width={160}
-                height={160}
-                className="h-40 w-40 rounded-xl object-cover"
-                unoptimized
+      {tab === 'cek' ? (
+        <div className="rounded-card border border-border bg-card p-4 shadow-1 sm:p-5">
+          <form onSubmit={(e) => void handleCheck(e)} className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                placeholder="62812…"
+                inputMode="tel"
+                aria-label="Nomor WhatsApp"
               />
-            ) : null}
-            {about !== null ? (
-              <p className="text-sm text-zinc-300">
-                <span className="text-zinc-500">About: </span>
-                {about === '' ? '(kosong)' : about}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </Card>
+            </div>
+            <Button type="submit" disabled={checking || !sessionId}>
+              <Search size={15} /> {checking ? 'Mengecek…' : 'Cek'}
+            </Button>
+          </form>
 
-      <Card title={`Blocklist (${blocklist.length})`}>
-        <div className="flex gap-2">
-          <div className="min-w-0 flex-1">
-            <TextInput
-              value={blockInput}
-              onChange={(e) => setBlockInput(e.target.value)}
-              placeholder="62812… (kosongkan = pakai nomor di atas)"
-              inputMode="tel"
-              aria-label="Nomor untuk diblokir"
-            />
-          </div>
-          <Button variant="danger" disabled={busy || !sessionId} onClick={() => void handleBlock()}>
-            <span className="flex items-center gap-1"><Ban size={16} /> Blokir</span>
-          </Button>
+          {result ? (
+            <motion.div
+              key={result.jid ?? 'n'}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.25 }}
+              className="mt-4 flex flex-col items-center gap-3 rounded-card border border-border bg-background px-4 py-5 text-center"
+              aria-live="polite"
+            >
+              {result.exists ? (
+                <CheckCircle2 size={36} className="text-status-open" />
+              ) : (
+                <XCircle size={36} className="text-status-failed" />
+              )}
+              <p className="font-display text-lg font-semibold">
+                {result.exists ? 'Terdaftar di WhatsApp' : 'Tidak terdaftar'}
+              </p>
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                {result.jid ?? '(tanpa JID)'}
+              </p>
+              {result.exists ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={number} src={photoUrl} size={72} />
+                    <div className="text-left text-sm">
+                      <p className="text-muted-foreground">About:</p>
+                      <p className="max-w-56 break-words">
+                        {about === null ? '—' : about === '' ? '(kosong)' : about}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="secondary" size="sm" disabled={photoLoading} onClick={() => void handlePhoto()}>
+                      {photoLoading ? 'Memuat foto…' : 'Lihat foto'}
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled={aboutLoading} onClick={() => void handleAbout()}>
+                      {aboutLoading ? 'Memuat…' : 'Lihat about'}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </motion.div>
+          ) : null}
         </div>
-        {blocklist.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-400">Tidak ada kontak diblokir.</p>
-        ) : (
-          <ul className="mt-3 flex flex-col gap-1">
-            {blocklist.map((jid) => (
-              <li
-                key={jid}
-                className="flex items-center justify-between gap-2 rounded-lg bg-zinc-950 px-3 py-1.5 text-sm"
-              >
-                <span className="min-w-0 flex-1 break-all text-zinc-200">{jid}</span>
-                <Button variant="secondary" disabled={busy} onClick={() => void handleUnblock(jid)}>
-                  <span className="flex items-center gap-1 text-xs"><Undo2 size={12} /> Buka</span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      ) : (
+        <div className="rounded-card border border-border bg-card p-4 shadow-1 sm:p-5">
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                value={blockInput}
+                onChange={(e) => setBlockInput(e.target.value)}
+                placeholder="62812… (kosongkan = pakai nomor di atas)"
+                inputMode="tel"
+                aria-label="Nomor untuk diblokir"
+              />
+            </div>
+            <Button variant="danger" disabled={busy || !sessionId} onClick={() => void handleBlock()}>
+              <Ban size={15} /> Blokir
+            </Button>
+          </div>
+          {blocklist.length === 0 ? (
+            <div className="mt-3">
+              <EmptyState title="Blocklist kosong" hint="Tidak ada kontak yang diblokir di session ini." />
+            </div>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-1">
+              {blocklist.map((jid) => (
+                <li
+                  key={jid}
+                  className="flex items-center gap-2.5 rounded-control bg-background px-3 py-2 text-sm"
+                >
+                  <Avatar name={jid} size={30} />
+                  <span className="min-w-0 flex-1 break-all font-mono text-[13px]">{jid}</span>
+                  <Button variant="secondary" size="sm" disabled={busy} onClick={() => void handleUnblock(jid)}>
+                    <Undo2 size={13} /> Buka
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

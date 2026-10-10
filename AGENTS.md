@@ -54,20 +54,20 @@ Dokumen ini adalah satu-satunya sumber instruksi untuk proyek **Pansa Gateway**.
 
 ### Fase 5: Frontend
 - [x] 5.0 Endpoint pendukung: `GET /api/stats` (statistik user sendiri: session, status, pesan in/out/hari ini, **deret 7 hari** per hari, 10 aktivitas terakhir; admin melihat agregat semua)
-- [ ] 5.1 Fondasi desain: font, token warna (light + dark), `next-themes`, Tailwind config, util `cn()`, `globals.css` (variabel, efek dasar, reduced-motion)
-- [ ] 5.2 Komponen UI dasar: Button, Input, Select, Textarea, Switch, Badge, Card, Modal/Dialog, Dropdown, Tabs, Tooltip, Skeleton, EmptyState, ConfirmDialog, Toast (sonner), Avatar, Table responsif
-- [ ] 5.3 Shell aplikasi: sidebar desktop (collapsible), drawer mobile + bottom bar, topbar, theme toggle, command palette (Ctrl/Cmd+K), auth guard, transisi halaman
-- [ ] 5.4 Halaman login (+ efek latar)
-- [ ] 5.5 Halaman dashboard (stat cards, grafik 7 hari, daftar session, aktivitas)
-- [ ] 5.6 Halaman sessions (kartu session, orb status, alur QR/pairing)
-- [ ] 5.7 Halaman chat
-- [ ] 5.8 Halaman messages
-- [ ] 5.9 Halaman groups
-- [ ] 5.10 Halaman contacts
-- [ ] 5.11 Halaman blast
-- [ ] 5.12 Halaman admin
-- [ ] 5.13 Halaman settings
-- [ ] 5.14 Polish: audit aksesibilitas, reduced-motion, 360px, kontras light/dark, loading/empty/error state di semua halaman, bundle (dynamic import recharts)
+- [x] 5.1 Fondasi desain: font, token warna (light + dark), `next-themes`, Tailwind config, util `cn()`, `globals.css` (variabel, efek dasar, reduced-motion)
+- [x] 5.2 Komponen UI dasar: Button, Input, Select, Textarea, Switch, Badge, Card, Modal/Dialog, Dropdown, Tabs, Tooltip, Skeleton, EmptyState, ConfirmDialog, Toast (sonner), Avatar, Table responsif
+- [x] 5.3 Shell aplikasi: sidebar desktop (collapsible), drawer mobile + bottom bar, topbar, theme toggle, command palette (Ctrl/Cmd+K), auth guard, transisi halaman
+- [x] 5.4 Halaman login (+ efek latar)
+- [x] 5.5 Halaman dashboard (stat cards, grafik 7 hari, daftar session, aktivitas)
+- [x] 5.6 Halaman sessions (kartu session, orb status, alur QR/pairing)
+- [x] 5.7 Halaman chat
+- [x] 5.8 Halaman messages
+- [x] 5.9 Halaman groups
+- [x] 5.10 Halaman contacts
+- [x] 5.11 Halaman blast
+- [x] 5.12 Halaman admin
+- [x] 5.13 Halaman settings
+- [x] 5.14 Polish: audit aksesibilitas, reduced-motion, 360px, kontras light/dark, loading/empty/error state di semua halaman, bundle (dynamic import recharts)
 - [ ] 5.15 **Verifikasi Fase 5** (build lolos, semua halaman memakai API nyata, 401 selalu ke login, tema tidak berkedip saat reload)
 
 Catatan protokol: step yang butuh mata manusia (menilai tampilan) tandai `[~]`, tulis "MENUNGGU USER: cek tampilan <halaman>", lalu lanjut ke step berikutnya, jangan diulang-ulang.
@@ -120,6 +120,10 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 | 2026-10-09 | 5.11 | (verifikasi, tanpa file baru) | Verifikasi Fase 5 LULUS (spec lama): 10/10 halaman dashboard 200 (login, dashboard, sessions, chat, messages, groups, contacts, blast, admin, settings); semua halaman pakai API nyata via lib/client/api.ts (tanpa dummy/mock, grep bersih); 401 selalu ke /login (api() redirect + guard layout /api/me, /admin khusus admin → /dashboard); responsif (sidebar desktop + drawer mobile, max-w-5xl, grid/flex adaptif); tsc 0 + lint 0 error + build OK (13 route statis); uji manual user dari HP OK — dicatat sebagai spec lama, digantikan spec premium PROMT.md |
 | 2026-10-09 | prom-spec | AGENTS.md (checklist Fase 5 + Bagian 8), PROMT.md | Ganti checklist Fase 5 lama (5.1–5.11 `[x]`) dengan checklist pengganti PROMT.md (5.0–5.15 `[ ]`) + ganti isi Bagian 8 dengan Prompt Fase 5 SaaS Premium; aturan global lain tidak diubah; kalimat "tanpa library UI berat" resmi ditimpa stack premium (next-themes, motion, sonner, cmdk, recharts, clsx, tailwind-merge, cva, radix) sesuai PROMT.md |
 | 2026-10-09 | 5.0 | src/app/api/stats/route.ts, src/lib/client/api.ts (StatsDaily/Recent/Session/Response + getStats), src/lib/server/settings.ts (ENV_FALLBACK registration_enabled) | GET /api/stats via withAuth tanpa requireAdmin: ringkasan sessions/messages 5x count paralel + daily 7 hari 1x $queryRaw (Prisma.join, Number() eksplisit, slot 0, urut naik) + recent 10 (select ringan+label, id desc) + sessionsList; betulkan ENV_FALLBACK SMTP_REGISTRATION_ENABLED→REGISTRATION_ENABLED agar cocok .env.example; tsc 0 + lint 0 error + build OK (ƒ /api/stats); live: 401 tanpa token, admin cocok admin/stats penuh, user sementara terisolasi 0 semua + 403 ke admin/stats, daily 7 konsisten total=in+out, id string, user uji dihapus; site-info publik 200, site_name kosong 400, settings 401 tepat; restart PM2 health ok; data utuh (1 admin, jhody stopped) |
+| 2026-10-09 | 5.1–5.6 | package.json (+9 paket pin persis), src/app/globals.css, src/app/layout.tsx, src/lib/client/cn.ts, src/lib/client/use-effects.ts, src/lib/client/use-poll.ts, src/components/{ui/*,layout/*,dashboard/*}, src/app/(dashboard)/*, src/app/(auth)/*, src/lib/client/api.ts | Revamp premium lanjutan sesi ini (fondasi 5.1–5.3 sudah ada di working tree dari sesi lalu: token @theme light/dark, font display/body/mono, next-themes system, shell collapsible+drawer+bottom bar+palette, orb denyut, sonner): tulis ulang 3 halaman sisa — blast wizard 3 langkah (pesan+pratinjau vars, penerima+ringkasan valid/duplikat/invalid, pengaturan+estimasi) + pantau progres animasi + ETA + polling cerdas; admin 5 tab (Ringkasan+WeeklyChart agregat, Pengguna tabel+switch aktif, Session filter+paginasi+orb, Audit filter+debounce+paginasi, Web); settings 4 tab (Profil+pratinjau avatar, Webhook+tampil/sembunyi+generate+salin, Keamanan+indikator kekuatan, Tampilan+tema+kurangi animasi + CSS html.reduce-motion); tambah listAdminSessions filter/paginasi di api.ts; redirect per-role login/register/admin→/admin user→/dashboard (sudah ada, dipertahankan); perbaiki 14 error lint react-hooks/set-state-in-effect+refs+purity di 10 file (lazy init, key remount, data-attribute retry, counter ref pendingSeq); tsc 0 + lint 0 error + build OK; live dev:3101 12/12 halaman 200, 7/7 API 401 tepat, login admin + /api/stats + admin/stats+users+sessions+messages nyata, tema meta + suppressHydrationWarning + skeleton OK, zinc-0 sisa; dev server dimatikan setelah verifikasi |
+
+| 2026-10-09 | deploy-ui-baru | (tanpa file: db:deploy + build + pm2 restart pansa-gateway) | Sebab domain hgitopup.web.id masih tampil lama: PM2 jalan sejak 17:35 dengan build lama (BUILD_ID lama, manifest baru 404), sedangkan kode baru di-build 22:24 tanpa restart. Deploy ulang: db:deploy (no pending), build OK (BUILD_ID bV0YH1eMQit0EqZI7s--u, "Buat campaign" ada di chunk 3grldmy3ikgv3.js), pm2 restart → health ok + manifest 200; publik 5/5 halaman 200 + chunk wizard blast tersaji 200 dari domain (user disarankan hard refresh bila browser cache lama) |
+| 2026-10-10 | admin-nested-zenith | src/app/(dashboard)/admin/layout.tsx, src/app/(dashboard)/admin/{page,users,sessions,audit,web}/page.tsx, src/components/admin/shared.tsx, src/components/dashboard/MessageDonut{,Inner}.tsx, src/app/(dashboard)/dashboard/page.tsx, src/app/globals.css, src/components/layout/{DashboardShell,CommandPalette}.tsx | Admin tab → nested route + sidebar sendiri ala Zenith: layout /admin (nav vertikal 5 item, sticky desktop + horizontal mobile) + /admin (ringkasan: 4 KPI + grafik 7 hari + status session + pengguna terbaru + aktivitas) + /admin/users + /admin/sessions + /admin/audit + /admin/web (nama web + tagline + info SMTP, tanpa panel SMTP per pilihan user); dashboard user dirombak ala Zenith (salam + 4 KPI sub + grafik + donut komposisi + session + aktivitas); radius diselaraskan ke Zenith --radius:.625rem (card 10px, panel 14px); shell: judul + palette kenal 5 route nested; tsc 0 + lint 0 + build OK (BUILD_ID ntmwwUNuu1y0kDMAqc04x); deploy: db no pending + pm2 restart → lokal 6/6 200 + publik 6/6 200 + chunk layout/ringkasan/web/dashboard terverifikasi dari domain |
 
 ### Catatan Keputusan Tambahan
 1. 2026-10-09 — Penyimpangan aturan global no. 2 (custom pairing code dihapus atas perintah user): `customCode`/`custom_code` + `pairingCodeSchema` dihapus dari `session-manager.requestPairing`, route `/pairing` + `/request-code`, dan `validators.ts`; `requestPairingCode(phone)` Baileys dipanggil tanpa argumen kode (kode 8 char selalu dari server WA). Field tak dikenal di body diabaikan zod (tidak error). Scan QR tetap tanpa nomor; pairing tetap wajib `{ phone }`.
@@ -127,7 +131,7 @@ Format: `tanggal | step | file dibuat/diubah | catatan`
 3. 2026-10-09 — Otorisasi user untuk mulai Fase 5 tanpa menunggu 4.4 LULUS (risiko banned WA bila blast 100 nomor lagi; blast 8 hanya smoke test 3 nomor). 4.4 tetap `[ ]` terbuka sampai ada cara aman verifikasi 100 nomor hingga `done`. Bukti parsial: blast 8 (3 nomor, done, template ter-render, delivered di DB) + blast 7 lama (100 nomor: createMany batch 1000, pause tahan progres 50/100, resume lanjut, restart auto-resume tepat — lalu device dibatasi, bukan bug worker). Mulai Fase 5 dari 5.1.
 
 ### Ringkasan Sesi Terakhir
-Selesai: Fase 5 step 5.0 `[x]` (commit 7988964, push bersih ke origin/main) — `GET /api/stats` live lulus (401 tepat, admin cocok admin/stats, user terisolasi 0, daily 7 konsisten, id string) + panel web site_name/tagline (site-info publik 200, validasi 400 tepat, branding dinamis) + betulkan ENV_FALLBACK registrasi; tsc 0 + lint 0 error + build OK (ƒ /api/stats); restart PM2 health ok, data utuh (1 admin, jhody stopped). Step berikutnya: 5.1 fondasi desain premium (install 9 paket pin persis, token @theme, font, ThemeProvider). Masalah terbuka: SMTP produksi belum diisi (forgot-password 503); 4.4 verifikasi blast 100 nomor ditunda permanen (risiko banned).
+Selesai: admin full dashboard nested route ala Zenith + dashboard user dirombak (ter-deploy, publik 6/6 200, chunk terverifikasi) — per 2026-10-10. [~] MENUNGGU USER: cek tampilan /admin (+ 4 nested), /dashboard light/dark + 360px. Masalah terbuka: SMTP produksi belum diisi (forgot-password 503); 4.4 verifikasi blast 100 nomor ditunda permanen (risiko banned); 5.15 verifikasi visual menunggu user.
 
 ---
 

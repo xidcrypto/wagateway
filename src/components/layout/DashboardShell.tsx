@@ -3,36 +3,61 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   BookUser,
+  ChevronLeft,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Megaphone,
   Menu,
   MessageSquare,
   MessagesSquare,
+  Search,
   Settings,
   ShieldCheck,
   Smartphone,
+  User,
   Users,
   X,
 } from 'lucide-react';
 import { ApiError, api, clearToken, getSiteInfo, getToken } from '@/lib/client/api';
-import { ToastHost } from '@/components/ui/Toast';
+import { toast } from '@/components/ui/Toast';
+import { StatusOrb } from '@/components/ui/StatusOrb';
+import { ThemeIconButton } from '@/components/layout/ThemeToggle';
+import { CommandPalette } from '@/components/layout/CommandPalette';
+import { cn } from '@/lib/client/cn';
 
 type NavItem = { href: string; label: string; icon: ReactNode; adminOnly?: boolean };
 
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-  { href: '/sessions', label: 'Sessions', icon: <Smartphone size={18} /> },
-  { href: '/chat', label: 'Chat', icon: <MessagesSquare size={18} /> },
-  { href: '/messages', label: 'Pesan', icon: <MessageSquare size={18} /> },
-  { href: '/groups', label: 'Grup', icon: <Users size={18} /> },
-  { href: '/contacts', label: 'Kontak', icon: <BookUser size={18} /> },
-  { href: '/blast', label: 'Blast', icon: <Megaphone size={18} /> },
-  { href: '/admin', label: 'Admin', icon: <ShieldCheck size={18} />, adminOnly: true },
-  { href: '/settings', label: 'Pengaturan', icon: <Settings size={18} /> },
+  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={19} /> },
+  { href: '/sessions', label: 'Sessions', icon: <Smartphone size={19} /> },
+  { href: '/chat', label: 'Chat', icon: <MessagesSquare size={19} /> },
+  { href: '/messages', label: 'Pesan', icon: <MessageSquare size={19} /> },
+  { href: '/groups', label: 'Grup', icon: <Users size={19} /> },
+  { href: '/contacts', label: 'Kontak', icon: <BookUser size={19} /> },
+  { href: '/blast', label: 'Blast', icon: <Megaphone size={19} /> },
+  { href: '/admin', label: 'Admin', icon: <ShieldCheck size={19} />, adminOnly: true },
+  { href: '/settings', label: 'Pengaturan', icon: <Settings size={19} /> },
 ];
+
+const TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/sessions': 'Sessions',
+  '/chat': 'Chat',
+  '/messages': 'Pesan',
+  '/groups': 'Grup',
+  '/contacts': 'Kontak',
+  '/blast': 'Blast',
+  '/admin': 'Admin',
+  '/admin/users': 'Admin · Pengguna',
+  '/admin/sessions': 'Admin · Session',
+  '/admin/audit': 'Admin · Audit pesan',
+  '/admin/web': 'Admin · Web',
+  '/settings': 'Pengaturan',
+};
 
 type MeUser = {
   username: string;
@@ -44,12 +69,14 @@ function SidebarBody({
   pathname,
   user,
   siteName,
+  collapsed,
   onNavigate,
   onLogout,
 }: {
   pathname: string;
   user: MeUser | null;
   siteName: string;
+  collapsed: boolean;
   onNavigate: () => void;
   onLogout: () => void;
 }) {
@@ -59,11 +86,22 @@ function SidebarBody({
       <Link
         href="/dashboard"
         onClick={onNavigate}
-        className="px-4 pb-4 pt-5 text-lg font-bold text-zinc-50"
+        title={siteName}
+        className={cn(
+          'flex items-center gap-2.5 px-4 pb-4 pt-5',
+          collapsed && 'justify-center px-2',
+        )}
       >
-        {siteName}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-gradient-to-br from-primary to-gradient-to font-display text-lg font-bold text-white">
+          {siteName.trim().charAt(0).toUpperCase() || 'P'}
+        </span>
+        {collapsed ? null : (
+          <span className="truncate font-display text-[17px] font-bold text-foreground">
+            {siteName}
+          </span>
+        )}
       </Link>
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
+      <nav className="relative flex flex-1 flex-col gap-1 overflow-y-auto px-3" aria-label="Navigasi utama">
         {items.map((n) => {
           const active = pathname === n.href || pathname.startsWith(n.href + '/');
           return (
@@ -71,30 +109,55 @@ function SidebarBody({
               key={n.href}
               href={n.href}
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+              title={collapsed ? n.label : undefined}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'relative flex min-h-11 items-center gap-3 rounded-control px-3 text-sm transition',
+                collapsed && 'justify-center px-0',
                 active
-                  ? 'bg-emerald-950 font-semibold text-emerald-300'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
-              }`}
+                  ? 'font-semibold text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
-              {n.icon}
-              {n.label}
+              {active ? (
+                <motion.span
+                  layoutId="nav-pill"
+                  transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                  className="absolute inset-0 rounded-control bg-muted"
+                />
+              ) : null}
+              <span className="relative z-10">{n.icon}</span>
+              {collapsed ? null : <span className="relative z-10">{n.label}</span>}
             </Link>
           );
         })}
       </nav>
-      <div className="border-t border-zinc-800 p-3">
-        <p className="truncate px-1 text-xs text-zinc-500">
-          {user ? `${user.fullName} (${user.role})` : '…'}
-        </p>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-        >
-          <LogOut size={16} />
-          Keluar
-        </button>
+      <div className="border-t border-border p-3">
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Keluar"
+            aria-label="Keluar"
+            className="pressable flex min-h-11 w-full items-center justify-center rounded-control text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <LogOut size={18} />
+          </button>
+        ) : (
+          <>
+            <p className="truncate px-1 text-xs text-muted-foreground">
+              {user ? `${user.fullName} (${user.role})` : '…'}
+            </p>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="pressable mt-2 flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <LogOut size={16} />
+              Keluar
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -107,6 +170,25 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [siteName, setSiteName] = useState('Pansa Gateway');
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('pansa_sidebar') === 'collapsed';
+    } catch {
+      return false;
+    }
+  });
+  const [userMenu, setUserMenu] = useState(false);
+
+  function toggleCollapse(): void {
+    setCollapsed((v) => {
+      try {
+        window.localStorage.setItem('pansa_sidebar', v ? 'expanded' : 'collapsed');
+      } catch {
+        // Abaikan.
+      }
+      return !v;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +232,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   // Halaman /admin hanya untuk admin: non-admin dikembalikan ke dashboard.
   useEffect(() => {
     if (ready && user && pathname.startsWith('/admin') && user.role !== 'admin') {
+      toast('error', 'Halaman admin hanya untuk admin.');
       router.replace('/dashboard');
     }
   }, [ready, user, pathname, router]);
@@ -161,39 +244,75 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-        <p className="text-zinc-400">Memuat…</p>
+      <main className="aurora flex min-h-screen items-center justify-center px-4">
+        <div className="flex w-full max-w-md flex-col gap-3" aria-label="Memuat">
+          <div className="skeleton h-8 w-48" />
+          <div className="skeleton h-24 w-full" />
+          <div className="skeleton h-24 w-full" />
+        </div>
       </main>
     );
   }
 
-  return (
-    <ToastHost>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100">
-        {/* Sidebar desktop */}
-        <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-zinc-800 bg-zinc-900 md:block">
-          <SidebarBody
-            pathname={pathname}
-            user={user}
-            siteName={siteName}
-            onNavigate={() => {}}
-            onLogout={handleLogout}
-          />
-        </aside>
+  const base = '/' + pathname.split('/')[1];
+  const title = TITLES[pathname] ?? TITLES[base] ?? 'Pansa';
 
-        {/* Drawer mobile */}
+  return (
+    <div className="min-h-screen text-foreground">
+      <CommandPalette
+        isAdmin={user?.role === 'admin'}
+        onCreateSession={() => router.push('/sessions')}
+      />
+      {/* Sidebar desktop */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 hidden border-r border-border bg-card transition-[width] duration-200 md:block',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        <SidebarBody
+          pathname={pathname}
+          user={user}
+          siteName={siteName}
+          collapsed={collapsed}
+          onNavigate={() => {}}
+          onLogout={handleLogout}
+        />
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          aria-label={collapsed ? 'Lebarkan sidebar' : 'Lipatkan sidebar'}
+          title={collapsed ? 'Lebarkan' : 'Lipatkan'}
+          className="pressable absolute -right-3 top-16 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft size={14} className={cn('transition-transform', collapsed && 'rotate-180')} />
+        </button>
+      </aside>
+
+      {/* Drawer mobile */}
+      <AnimatePresence>
         {drawer ? (
           <div className="fixed inset-0 z-40 md:hidden">
-            <div
-              className="absolute inset-0 bg-black/70"
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/60"
               onClick={() => setDrawer(false)}
             />
-            <aside className="absolute inset-y-0 left-0 w-64 bg-zinc-900">
+            <motion.aside
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+              className="glass absolute inset-y-0 left-0 w-64 border-r border-border"
+            >
               <button
                 type="button"
                 aria-label="Tutup menu"
                 onClick={() => setDrawer(false)}
-                className="absolute right-2 top-3 rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                className="pressable absolute right-2 top-3 rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X size={18} />
               </button>
@@ -201,29 +320,132 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 pathname={pathname}
                 user={user}
                 siteName={siteName}
+                collapsed={false}
                 onNavigate={() => setDrawer(false)}
                 onLogout={handleLogout}
               />
-            </aside>
+            </motion.aside>
           </div>
         ) : null}
+      </AnimatePresence>
 
-        {/* Konten */}
-        <div className="md:pl-60">
-          <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur md:hidden">
+      {/* Konten */}
+      <div className={cn('pb-20 md:pb-0', collapsed ? 'md:pl-16' : 'md:pl-60')}>
+        <header className="glass sticky top-0 z-30 border-b border-border">
+          <div className="mx-auto flex min-h-14 w-full max-w-7xl items-center gap-2 px-4 py-2 md:px-6">
             <button
               type="button"
               aria-label="Buka menu"
               onClick={() => setDrawer(true)}
-              className="rounded-lg p-2 text-zinc-300 hover:bg-zinc-800"
+              className="pressable rounded-control p-2.5 text-foreground hover:bg-muted md:hidden"
             >
               <Menu size={20} />
             </button>
-            <span className="font-bold">{siteName}</span>
-          </header>
-          <main className="mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
-        </div>
+            <h1 className="font-display text-lg font-semibold">{title}</h1>
+            <div className="flex-1" />
+            <button
+              type="button"
+              aria-label="Pencarian cepat (Ctrl K)"
+              title="Pencarian cepat (Ctrl+K)"
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+              className="pressable hidden min-h-10 items-center gap-2 rounded-control border border-border bg-card px-3 text-[13px] text-muted-foreground hover:text-foreground sm:flex"
+            >
+              <Search size={15} />
+              <span>Cari…</span>
+              <kbd className="rounded border border-border bg-muted px-1.5 font-mono text-[11px]">
+                Ctrl K
+              </kbd>
+            </button>
+            <ThemeIconButton />
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Menu pengguna"
+                aria-expanded={userMenu}
+                onClick={() => setUserMenu((v) => !v)}
+                className="pressable flex min-h-10 items-center gap-2 rounded-control border border-border bg-card px-2.5 text-sm font-medium hover:bg-muted"
+              >
+                <User size={16} className="text-muted-foreground" />
+                <span className="hidden max-w-28 truncate lg:inline">
+                  {user?.fullName ?? '…'}
+                </span>
+              </button>
+              {userMenu ? (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserMenu(false)} />
+                  <div className="absolute right-0 z-50 mt-1.5 w-52 rounded-card border border-border bg-card p-1 shadow-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenu(false);
+                        router.push('/settings');
+                      }}
+                      className="pressable flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-sm hover:bg-muted"
+                    >
+                      <Settings size={15} className="text-muted-foreground" />
+                      Pengaturan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="pressable flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-sm text-status-failed hover:bg-muted"
+                    >
+                      <LogOut size={15} />
+                      Keluar
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6">
+          <div key={pathname} className="page-enter">
+            {children}
+          </div>
+        </main>
       </div>
-    </ToastHost>
+
+      {/* Bottom bar mobile */}
+      <nav
+        aria-label="Navigasi cepat"
+        className="glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border md:hidden"
+      >
+        {[
+          { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+          { href: '/sessions', label: 'Sessions', icon: <Smartphone size={20} /> },
+          { href: '/chat', label: 'Chat', icon: <MessagesSquare size={20} /> },
+        ].map((n) => {
+          const active = pathname === n.href || pathname.startsWith(n.href + '/');
+          return (
+            <Link
+              key={n.href}
+              href={n.href}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px]',
+                active ? 'font-semibold text-primary' : 'text-muted-foreground',
+              )}
+            >
+              {n.icon}
+              {n.label}
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setDrawer(true)}
+          aria-label="Menu lainnya"
+          className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted-foreground"
+        >
+          <LayoutGrid size={20} />
+          Lainnya
+        </button>
+      </nav>
+    </div>
   );
+}
+
+export function SessionOrbHeader({ status }: { status: string }) {
+  return <StatusOrb status={status} size={8} />;
 }

@@ -1,42 +1,89 @@
-'use client';
-
+import * as Dialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/client/cn';
 
 export function Modal({
   title,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  wide?: boolean;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-4 sm:items-center"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold text-zinc-100">{title}</h3>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="glass fixed inset-0 z-40 bg-black/55" />
+        <Dialog.Content
+          aria-label={title}
+          className={cn(
+            'fixed left-1/2 top-1/2 z-50 max-h-[88vh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-panel border border-border bg-card p-4 shadow-3 sm:p-5',
+            wide ? 'max-w-2xl' : 'max-w-md',
+          )}
+        >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <Dialog.Title className="font-display text-lg font-semibold text-foreground">
+              {title}
+            </Dialog.Title>
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                aria-label="Tutup"
+                className="rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </Dialog.Close>
+          </div>
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+/** Dialog konfirmasi destruktif yang menyebut nama objeknya. */
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  title: string;
+  message: ReactNode;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <Modal title={title} onClose={onCancel}>
+      <div className="text-sm leading-6 text-foreground">{message}</div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Dialog.Close asChild>
           <button
             type="button"
-            aria-label="Tutup"
-            onClick={onClose}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+            onClick={onCancel}
+            className="pressable min-h-10 rounded-control border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
           >
-            <X size={18} />
+            Batal
           </button>
-        </div>
-        {children}
+        </Dialog.Close>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onConfirm}
+          className="pressable min-h-10 rounded-control bg-status-failed px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-55"
+        >
+          {busy ? 'Memproses…' : confirmLabel}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

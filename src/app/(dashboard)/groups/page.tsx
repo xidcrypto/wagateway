@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, Copy, LogOut, Plus, RefreshCw, UserMinus, UserPlus } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Select, TextArea, TextInput } from '@/components/ui/Fields';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog, Modal } from '@/components/ui/Modal';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Avatar, CopyButton } from '@/components/ui/Avatar';
+import { EmptyState, Skeleton } from '@/components/ui/States';
+import { Menu, TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
 import {
   ApiError,
@@ -47,6 +50,8 @@ function GroupDetail({
   const [memberInput, setMemberInput] = useState('');
   const [renameInput, setRenameInput] = useState('');
   const [showLeave, setShowLeave] = useState(false);
+  const [tab, setTab] = useState<'anggota' | 'pengaturan' | 'undangan' | 'bahaya'>('anggota');
+  const [kickTarget, setKickTarget] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
     try {
@@ -165,126 +170,204 @@ function GroupDetail({
     }
   }
 
-  function copyLink(): void {
-    if (!invite) return;
-    void navigator.clipboard?.writeText(invite.link).then(
-      () => toast('success', 'Link disalin.'),
-      () => toast('error', 'Gagal menyalin.'),
+  async function handleSingle(action: 'promote' | 'demote', target: string): Promise<void> {
+    setBusy(true);
+    try {
+      await updateGroupMembers(sessionId, jid, action, [target]);
+      toast('success', action === 'promote' ? `${target} dijadikan admin.` : `Admin ${target} dicabut.`);
+      await refresh();
+      onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Gagal mengubah peran anggota.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleKick(): Promise<void> {
+    if (!kickTarget) return;
+    setBusy(true);
+    try {
+      await updateGroupMembers(sessionId, jid, 'remove', [kickTarget]);
+      toast('success', `${kickTarget} dikeluarkan.`);
+      setKickTarget(null);
+      await refresh();
+      onChanged();
+    } catch (e) {
+      toast('error', errMsg(e, 'Gagal mengeluarkan anggota.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!group) {
+    return (
+      <div className="flex flex-col gap-2" aria-label="Memuat detail grup">
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-32" />
+        <Skeleton className="h-32" />
+      </div>
     );
   }
 
-  if (!group) return <p className="text-zinc-400">Memuat detail…</p>;
-
   return (
     <div className="flex flex-col gap-4">
-      <Button variant="secondary" onClick={onBack}>
-        <span className="flex items-center gap-1"><ArrowLeft size={14} /> Kembali ke daftar</span>
+      <Button variant="secondary" onClick={onBack} className="self-start">
+        <ArrowLeft size={14} /> Kembali ke daftar
       </Button>
 
-      <Card title={group.subject ?? '(tanpa nama)'}>
-        <p className="break-all text-xs text-zinc-500">{group.id}</p>
-        <p className="mt-1 text-sm text-zinc-400">
-          {group.size} anggota
-          {group.announce ? ' · hanya admin bisa kirim' : ''}
-          {group.restrict ? ' · info terkunci' : ''}
-        </p>
-        {group.desc ? (
-          <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">{group.desc}</p>
-        ) : null}
-      </Card>
-
-      <Card title="Ubah nama">
-        <form onSubmit={(e) => void handleRename(e)} className="flex gap-2">
+      <div className="rounded-card border border-border bg-card p-4 shadow-1 sm:p-5">
+        <div className="flex items-start gap-3">
+          <Avatar name={group.subject ?? 'Grup'} size={48} />
           <div className="min-w-0 flex-1">
+            <h2 className="font-display truncate text-xl font-bold">{group.subject ?? '(tanpa nama)'}</h2>
+            <p className="break-all font-mono text-xs text-muted-foreground">{group.id}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+              {group.size} anggota
+              {group.announce ? <StatusBadge status="announce" /> : null}
+              {group.restrict ? <StatusBadge status="locked" /> : null}
+            </p>
+          </div>
+        </div>
+        {group.desc ? (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{group.desc}</p>
+        ) : null}
+      </div>
+
+      <TabList
+        tabs={[
+          { value: 'anggota', label: `Anggota (${group.participants.length})` },
+          { value: 'pengaturan', label: 'Pengaturan' },
+          { value: 'undangan', label: 'Undangan' },
+          { value: 'bahaya', label: 'Keluar' },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as 'anggota' | 'pengaturan' | 'undangan' | 'bahaya')}
+      />
+
+      {tab === 'anggota' ? (
+        <div className="rounded-card border border-border bg-card p-4 shadow-1">
+          <ul className="mb-3 flex max-h-64 flex-col gap-1 overflow-y-auto">
+            {group.participants.map((p, i) => {
+              const label = memberLabel(p);
+              return (
+                <li
+                  key={`${p.id ?? '?'}:${i}`}
+                  className="flex items-center gap-2.5 rounded-control bg-background px-3 py-2 text-sm"
+                >
+                  <Avatar name={label} size={32} />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{label}</span>
+                  {p.admin ? (
+                    <StatusBadge status={p.admin === 'superadmin' ? 'owner' : 'admin'} />
+                  ) : null}
+                  <Menu
+                    label={`Aksi ${label}`}
+                    trigger={
+                      <span className="pressable inline-flex min-h-9 min-w-9 items-center justify-center rounded-control border border-border text-muted-foreground hover:bg-muted hover:text-foreground">
+                        ⋯
+                      </span>
+                    }
+                    items={[
+                      { label: 'Jadikan admin', onClick: () => void handleSingle('promote', label) },
+                      { label: 'Cabut admin', onClick: () => void handleSingle('demote', label) },
+                      { label: 'Keluarkan', danger: true, onClick: () => setKickTarget(label) },
+                    ]}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          <TextArea
+            label="Nomor (satu per baris / koma, format 62812…)"
+            value={memberInput}
+            onChange={(e) => setMemberInput(e.target.value)}
+            rows={2}
+          />
+          <div className="mt-2">
+            <Button variant="secondary" disabled={busy} onClick={() => void handleMembers('add')}>
+              Tambah anggota
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === 'pengaturan' ? (
+        <div className="rounded-card border border-border bg-card p-4 shadow-1">
+          <form onSubmit={(e) => void handleRename(e)} className="flex flex-col gap-3">
             <TextInput
+              label="Nama grup"
               value={renameInput}
               onChange={(e) => setRenameInput(e.target.value)}
               maxLength={100}
-              aria-label="Nama grup baru"
             />
-          </div>
-          <Button type="submit" disabled={busy}>Simpan</Button>
-        </form>
-      </Card>
-
-      <Card title={`Anggota (${group.participants.length})`}>
-        <ul className="mb-3 flex max-h-48 flex-col gap-1 overflow-y-auto">
-          {group.participants.map((p, i) => (
-            <li
-              key={`${p.id ?? '?'}:${i}`}
-              className="flex items-center justify-between rounded-lg bg-zinc-950 px-3 py-1.5 text-sm"
-            >
-              <span className="text-zinc-200">{memberLabel(p)}</span>
-              {p.admin ? (
-                <span className="rounded-full bg-emerald-950 px-2 py-0.5 text-[11px] text-emerald-300">
-                  {p.admin === 'superadmin' ? 'owner' : 'admin'}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        <TextArea
-          label="Nomor (satu per baris / koma, format 62812…)"
-          value={memberInput}
-          onChange={(e) => setMemberInput(e.target.value)}
-          rows={2}
-        />
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={busy} onClick={() => void handleMembers('add')}>
-            <span className="flex items-center gap-1"><UserPlus size={14} /> Tambah</span>
-          </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void handleMembers('remove')}>
-            <span className="flex items-center gap-1"><UserMinus size={14} /> Hapus</span>
-          </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void handleMembers('promote')}>
-            Promote
-          </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void handleMembers('demote')}>
-            Demote
-          </Button>
-        </div>
-      </Card>
-
-      <Card title="Invite link">
-        {invite ? (
-          <div className="flex flex-col gap-2">
-            <p className="break-all rounded-lg bg-zinc-950 px-3 py-2 text-sm text-emerald-300">
-              {invite.link}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={copyLink}>
-                <span className="flex items-center gap-1"><Copy size={14} /> Salin</span>
-              </Button>
-              <Button variant="secondary" disabled={busy} onClick={() => void handleRevoke()}>
-                <span className="flex items-center gap-1"><RefreshCw size={14} /> Revoke & baru</span>
-              </Button>
+            <div>
+              <Button type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan nama'}</Button>
             </div>
-          </div>
-        ) : (
-          <Button variant="secondary" disabled={busy} onClick={() => void handleInvite()}>
-            Tampilkan invite link
-          </Button>
-        )}
-      </Card>
+          </form>
+        </div>
+      ) : null}
 
-      <Card title="Zona bahaya">
-        <Button variant="danger" onClick={() => setShowLeave(true)}>
-          <span className="flex items-center gap-1"><LogOut size={14} /> Keluar dari grup</span>
-        </Button>
-      </Card>
+      {tab === 'undangan' ? (
+        <div className="rounded-card border border-border bg-card p-4 shadow-1">
+          {invite ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 break-all rounded-control bg-background px-3 py-2 font-mono text-[13px] text-primary">
+                  {invite.link}
+                </p>
+                <CopyButton text={invite.link} label="Invite link" />
+              </div>
+              <div>
+                <Button variant="secondary" disabled={busy} onClick={() => void handleRevoke()}>
+                  Cabut & terbitkan baru
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="secondary" disabled={busy} onClick={() => void handleInvite()}>
+              {busy ? 'Memuat…' : 'Tampilkan invite link'}
+            </Button>
+          )}
+        </div>
+      ) : null}
 
-      {showLeave ? (
-        <Modal title="Keluar dari grup?" onClose={() => setShowLeave(false)}>
-          <p className="text-sm text-zinc-300">
+      {tab === 'bahaya' ? (
+        <div className="rounded-card border border-status-failed/40 bg-status-failed/5 p-4">
+          <p className="text-sm leading-6">
             Keluar dari <b>{group.subject}</b>? Kamu tidak bisa kembali tanpa invite baru.
           </p>
-          <div className="mt-4 flex gap-2">
-            <Button variant="secondary" onClick={() => setShowLeave(false)}>Batal</Button>
-            <Button variant="danger" disabled={busy} onClick={() => void handleLeave()}>
-              Ya, keluar
+          <div className="mt-3">
+            <Button variant="danger" onClick={() => setShowLeave(true)}>
+              Keluar dari grup
             </Button>
           </div>
-        </Modal>
+        </div>
+      ) : null}
+
+      {kickTarget ? (
+        <ConfirmDialog
+          title={`Keluarkan ${kickTarget}?`}
+          message={
+            <>
+              <b>{kickTarget}</b> akan dikeluarkan dari grup <b>{group.subject}</b>.
+            </>
+          }
+          confirmLabel="Ya, keluarkan"
+          busy={busy}
+          onCancel={() => setKickTarget(null)}
+          onConfirm={() => void handleKick()}
+        />
+      ) : null}
+
+      {showLeave ? (
+        <ConfirmDialog
+          title={`Keluar dari "${group.subject}"?`}
+          message="Kamu tidak bisa kembali tanpa invite baru."
+          confirmLabel="Ya, keluar"
+          busy={busy}
+          onCancel={() => setShowLeave(false)}
+          onConfirm={() => void handleLeave()}
+        />
       ) : null}
     </div>
   );
@@ -400,62 +483,69 @@ export default function GroupsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-xl font-bold text-zinc-50">Grup</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h1 className="font-display text-2xl font-bold">Grup</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Daftar, buat, dan kelola grup WhatsApp.
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)} disabled={!sessionId}>
-          <span className="flex items-center gap-1"><Plus size={16} /> Buat</span>
+          <Plus size={16} /> Buat grup
         </Button>
       </div>
 
-      <Select
-        label="Session"
-        value={sessionId}
-        onChange={(e) => {
-          setSessionId(e.target.value);
-          setSelected('');
-        }}
-      >
-        {sessions.length === 0 ? <option value="">Belum ada session</option> : null}
-        {sessions.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label} ({s.status}{s.phone ? ` · ${s.phone}` : ''})
-          </option>
-        ))}
-      </Select>
+      <div className="max-w-64">
+        <Select
+          aria-label="Session"
+          value={sessionId}
+          onChange={(e) => {
+            setSessionId(e.target.value);
+            setSelected('');
+          }}
+        >
+          {sessions.length === 0 ? <option value="">Belum ada session</option> : null}
+          {sessions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label} ({s.status}{s.phone ? ` · ${s.phone}` : ''})
+            </option>
+          ))}
+        </Select>
+      </div>
 
       {session && session.status !== 'open' ? (
-        <p role="alert" className="rounded-lg bg-amber-950 px-3 py-2 text-sm text-amber-300">
-          Session belum open (status: {session.status}). Daftar grup butuh koneksi aktif.
+        <p role="alert" className="rounded-control border border-status-connecting/40 bg-status-connecting/10 px-3 py-2 text-sm">
+          Session belum terhubung (status: {session.status}). Daftar grup butuh koneksi aktif.
         </p>
       ) : null}
 
       {loading ? (
-        <p className="text-zinc-400">Memuat…</p>
+        <div className="flex flex-col gap-2" aria-label="Memuat grup">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
+        </div>
       ) : groups.length === 0 ? (
-        <Card title="Belum ada grup">
-          <p className="text-sm text-zinc-400">
-            Session ini belum mengikuti grup mana pun, atau belum tersambung.
-          </p>
-        </Card>
+        <EmptyState
+          title="Belum ada grup"
+          hint="Session ini belum mengikuti grup mana pun, atau belum tersambung."
+        />
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {groups.map((g, i) => (
             <li key={g.id ?? `${g.subject ?? 'grup'}-${i}`}>
               <button
                 type="button"
                 onClick={() => setSelected(g.id ?? '')}
                 disabled={!g.id}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-left transition hover:border-zinc-700"
+                className="pressable flex w-full items-center gap-3 rounded-card border border-border bg-card px-3 py-2.5 text-left shadow-1 hover:border-primary/50"
               >
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  {g.subject ?? '(tanpa nama)'}
-                </p>
-                <p className="text-xs text-zinc-500">{g.size} anggota</p>
+                <Avatar name={g.subject ?? 'Grup'} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {g.subject ?? '(tanpa nama)'}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{g.size} anggota</span>
+                </span>
               </button>
             </li>
           ))}

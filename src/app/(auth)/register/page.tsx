@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { ApiError, getSiteInfo, register, setToken } from '@/lib/client/api';
-
-const inputClass =
-  'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-zinc-50 outline-none focus:border-emerald-500';
+import { motion } from 'motion/react';
+import { ApiError, getMe, getSiteInfo, getToken, register, setToken } from '@/lib/client/api';
+import { TextInput } from '@/components/ui/Fields';
+import { Button } from '@/components/ui/Button';
+import { ThemeIconButton } from '@/components/layout/ThemeToggle';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,6 +33,22 @@ export default function RegisterPage() {
     };
   }, []);
 
+  // Sudah login → langsung ke dashboard sesuai role.
+  useEffect(() => {
+    if (!getToken()) return;
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (!cancelled) {
+          router.replace(me.user.role === 'admin' ? '/admin' : '/dashboard');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError(null);
@@ -49,7 +66,7 @@ export default function RegisterPage() {
         phone: phone.trim() === '' ? undefined : phone.trim(),
       });
       setToken(result.token);
-      router.replace('/dashboard');
+      router.replace(result.user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -62,110 +79,96 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-8">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-        <h1 className="text-center text-2xl font-bold text-zinc-50">Daftar Akun</h1>
-        <p className="mt-1 text-center text-sm text-zinc-400">
+    <main className="aurora flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="absolute right-4 top-4">
+        <ThemeIconButton />
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-sm rounded-panel border border-border bg-card p-6 shadow-3"
+      >
+        <h1 className="font-display text-center text-2xl font-bold">Daftar Akun</h1>
+        <p className="mt-1 text-center text-sm text-muted-foreground">
           Buat akun {siteName} baru
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Username</span>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-              minLength={3}
-              maxLength={32}
-              className={inputClass}
-            />
-          </label>
+        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+          <TextInput
+            label="Username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            required
+            minLength={3}
+            maxLength={32}
+          />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              className={inputClass}
-            />
-          </label>
+          <TextInput
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Nama lengkap</span>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoComplete="name"
-              required
-              className={inputClass}
-            />
-          </label>
+          <TextInput
+            label="Nama lengkap"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            autoComplete="name"
+            required
+          />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Nomor HP (opsional)</span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-              className={inputClass}
-            />
-          </label>
+          <TextInput
+            label="Nomor HP (opsional)"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+          />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Password (min. 6 karakter)</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              required
-              minLength={6}
-              className={inputClass}
-            />
-          </label>
+          <TextInput
+            label="Password (min. 6 karakter)"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+            minLength={6}
+          />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-zinc-300">Konfirmasi password</span>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-              required
-              className={inputClass}
-            />
-          </label>
+          <TextInput
+            label="Konfirmasi password"
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
 
           {error ? (
-            <p role="alert" className="rounded-lg bg-red-950 px-3 py-2 text-sm text-red-300">
+            <p role="alert" className="rounded-control border border-status-failed/40 bg-status-failed/10 px-3 py-2 text-sm">
               {error}
             </p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60"
-          >
+          <Button type="submit" size="lg" disabled={loading} className="w-full">
             {loading ? 'Memproses…' : 'Daftar'}
-          </button>
+          </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-zinc-400">
+        <p className="mt-4 text-center text-sm text-muted-foreground">
           Sudah punya akun?{' '}
-          <Link href="/login" className="font-semibold text-emerald-400 hover:text-emerald-300">
+          <Link href="/login" className="font-semibold text-primary hover:text-primary-hover">
             Masuk
           </Link>
         </p>
-      </div>
+      </motion.div>
     </main>
   );
 }
