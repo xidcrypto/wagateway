@@ -166,6 +166,62 @@ body {
   transform: scale(0.97);
 }
 
+/* Bubble notifikasi: buka pop + item masuk stagger (transform + opacity saja). */
+.notif-pop {
+  transform-origin: top right;
+  animation: notif-pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes notif-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.notif-item {
+  opacity: 0;
+  animation: notif-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes notif-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* Badge bell berdenyut saat ada yang belum dibaca. */
+.notif-badge {
+  animation: notif-badge 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+@keyframes notif-badge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+/* Titik item baru berdenyut lembut. */
+.notif-dot {
+  animation: notif-dot 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+@keyframes notif-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* Orb "Denyut Koneksi" — satu-satunya gerak tanpa pemicu user. */
 .orb {
   position: relative;
@@ -293,6 +349,16 @@ body {
 
 /* Hormati reduced-motion: matikan dekoratif. */
 @media (prefers-reduced-motion: reduce) {
+  .notif-pop,
+  .notif-item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .notif-badge,
+  .notif-dot {
+    animation: none;
+  }
   .orb-open::before,
   .orb-open::after {
     animation: none;
@@ -330,7 +396,11 @@ html.reduce-motion .orb-open::after,
 html.reduce-motion .orb-spin::before,
 html.reduce-motion .orb-blink,
 html.reduce-motion .scanline,
-html.reduce-motion .page-enter {
+html.reduce-motion .page-enter,
+html.reduce-motion .notif-pop,
+html.reduce-motion .notif-item,
+html.reduce-motion .notif-badge,
+html.reduce-motion .notif-dot {
   animation: none;
 }
 html.reduce-motion .reveal {

@@ -3,12 +3,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { TextInput } from '@/components/ui/Fields';
+import { TextArea, TextInput } from '@/components/ui/Fields';
 import { ErrorState, Skeleton } from '@/components/ui/States';
 import { Switch } from '@/components/ui/Controls';
 import { errMsg } from '@/components/admin/shared';
 import { toast } from '@/components/ui/Toast';
 import {
+  broadcastNotification,
   clearSiteInfoCache,
   getAdminSettings,
   sendSettingsTestEmail,
@@ -55,6 +56,9 @@ export default function AdminWebPage() {
   const [saving, setSaving] = useState(false);
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
+  const [bcTitle, setBcTitle] = useState('');
+  const [bcBody, setBcBody] = useState('');
+  const [sending, setSending] = useState(false);
 
   function set<K extends keyof WebForm>(key: K, value: WebForm[K]): void {
     setForm((f) => ({ ...f, [key]: value }));
@@ -155,6 +159,29 @@ export default function AdminWebPage() {
       toast('error', errMsg(err, 'Gagal mengirim email tes.'));
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function handleBroadcast(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    if (!bcTitle.trim()) {
+      toast('error', 'Judul pengumuman wajib diisi.');
+      return;
+    }
+    setSending(true);
+    try {
+      const r = await broadcastNotification({
+        title: bcTitle.trim(),
+        body: bcBody.trim() || undefined,
+        link: '/notifikasi',
+      });
+      toast('success', `Pengumuman terkirim ke ${r.sent} user.`);
+      setBcTitle('');
+      setBcBody('');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal mengirim pengumuman.'));
+    } finally {
+      setSending(false);
     }
   }
 
@@ -330,6 +357,40 @@ export default function AdminWebPage() {
               Simpan konfigurasi SMTP dulu sebelum mengirim tes.
             </p>
           ) : null}
+        </form>
+      </Card>
+
+      <Card
+        title="Pengumuman ke user"
+        action={<span className="text-xs text-muted-foreground">masuk inbox + bell</span>}
+      >
+        <form onSubmit={(e) => void handleBroadcast(e)} className="flex max-w-xl flex-col gap-3">
+          <p className="text-xs leading-5 text-muted-foreground">
+            Kirim notifikasi inbox ke semua user aktif — mis. info update,
+            jadwal maintenance, atau pengumuman lain. User melihatnya lewat
+            bell di topbar dan halaman Notifikasi.
+          </p>
+          <TextInput
+            label="Judul pengumuman"
+            value={bcTitle}
+            onChange={(e) => setBcTitle(e.target.value)}
+            maxLength={255}
+            placeholder="mis. Maintenance malam ini 23.00–23.30"
+            required
+          />
+          <TextArea
+            label="Isi (opsional)"
+            value={bcBody}
+            onChange={(e) => setBcBody(e.target.value)}
+            maxLength={2000}
+            rows={3}
+            placeholder="Tulis detail pengumuman…"
+          />
+          <div>
+            <Button type="submit" disabled={sending}>
+              {sending ? 'Mengirim…' : 'Kirim pengumuman'}
+            </Button>
+          </div>
         </form>
       </Card>
     </div>

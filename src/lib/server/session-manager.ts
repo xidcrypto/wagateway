@@ -45,6 +45,9 @@ type LiveSession = {
   pairingPhone: string | null;
   pairingExpiresAt: number | null;
   reconnectTimer: NodeJS.Timeout | null;
+  cleanupTimer: NodeJS.Timeout | null;
+  /** Waktu hapus otomatis (ISO) untuk session logged_out; null bila tidak dijadwalkan. */
+  cleanupDeleteAt: string | null;
   stopping: boolean;
   starting: boolean;
 };
@@ -54,6 +57,17 @@ const RESTORE_GAP_MS = 1000;
 // TTL kode pairing mengikuti default Baileys `pairingCodeTimeoutMs: 180000` (3 menit).
 // QR pertama 60 detik lalu rotasi tiap 20 detik (diatur Baileys, bukan kita).
 const PAIRING_TTL_MS = 3 * 60 * 1000;
+/**
+ * Session logged_out (keluar dari HP) dihapus otomatis setelah jeda ini
+ * (default 5 menit, bisa diubah via env LOGGED_OUT_RETENTION_MS).
+ * HANYA logged_out — status stopped (stop manual) tidak ikut dihapus.
+ * Sebelum dihapus, owner diberi notifikasi inbox + countdown di UI.
+ */
+function loggedOutRetentionMs(): number {
+  const raw = Number(process.env.LOGGED_OUT_RETENTION_MS ?? String(5 * 60 * 1000));
+  if (!Number.isFinite(raw) || raw < 60_000) return 5 * 60 * 1000;
+  return Math.floor(raw);
+}
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 type ManagerStore = {
@@ -222,6 +236,8 @@ function getLive(sessionId: string): LiveSession {
       pairingPhone: null,
       pairingExpiresAt: null,
       reconnectTimer: null,
+      cleanupTimer: null,
+      cleanupDeleteAt: null,
       stopping: false,
       starting: false,
     };
@@ -272,6 +288,156 @@ function scheduleReconnect(sessionId: string): void {
   if (timer && typeof timer.unref === 'function') timer.unref();
 }
 
+/**
+ * Hapus permanen satu session: stop koneksi + hapus pesan + record
+ * (cascade blast) + folder kredensial. Dipakai DELETE manual dan
+ * cleanup logged_out otomatis. Status stopped TIDAK pernah masuk sini.
+ */
+export async function deleteSessionRecord(sessionId: string): Promise<boolean> {
+  assertValidSessionId(sessionId);
+  const live = getStore().sessions.get(sessionId);
+  if (live) {
+    live.stopping = true;
+    clearReconnect(live);
+    if (live.cleanupTimer) {
+      clearTimeout(live.cleanupTimer);
+      live.cleanupTimer = null;
+    }
+    live.cleanupDeleteAt = null;
+    const sock = live.sock;
+    live.sock = null;
+    if (sock) {
+      try {
+        sock.end?.(undefined);
+      } catch {
+        // Abaikan.
+      }
+      try {
+        sock.ev?.removeAllListeners?.('connection.update');
+        sock.ev?.removeAllListeners?.('creds.update');
+      } catch {
+        // Abaikan.
+      }
+    }
+  }
+  let existed = false;
+  try {
+    const rec = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true },
+    });
+    existed = rec !== null;
+  } catch {
+    existed = false;
+  }
+  try {
+    await prisma.message.deleteMany({ where: { sessionId } });
+  } catch {
+    // Abaikan.
+  }
+  try {
+    await prisma.session.delete({ where: { id: sessionId } });
+  } catch {
+    // Sudah tidak ada.
+  }
+  try {
+    await rm(sessionFolder(sessionId), { recursive: true, force: true });
+  } catch {
+    // Abaikan bila folder tidak ada.
+  }
+  getStore().sessions.delete(sessionId);
+  return existed;
+}
+
+/**
+ * Jadwalkan hapus otomatis untuk session logged_out (keluar dari HP).
+ * Alur: notifikasi "akan dihapus dalam 5 menit" → setelah jeda, cek ulang
+ * status DB: bila masih logged_out → hapus permanen + notifikasi "dihapus";
+ * bila sudah hidup lagi (start/scan ulang) → batal, tidak jadi hapus.
+ * Status stopped (stop manual) TIDAK dijadwalkan — hanya logged_out.
+ */
+export async function scheduleLoggedOutCleanup(sessionId: string): Promise<void> {
+  const live = getLive(sessionId);
+  if (live.cleanupTimer) {
+    clearTimeout(live.cleanupTimer);
+    live.cleanupTimer = null;
+  }
+  live.cleanupDeleteAt = null;
+  const waitMs = loggedOutRetentionMs();
+  // Ambil info session untuk notifikasi (label + owner).
+  let label = sessionId;
+  let ownerId: number | null = null;
+  try {
+    const rec = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { label: true, ownerId: true },
+    });
+    if (rec) {
+      label = rec.label;
+      ownerId = rec.ownerId;
+    }
+  } catch {
+    // Lanjut tanpa label.
+  }
+  const deleteAt = new Date(Date.now() + waitMs).toISOString();
+  if (ownerId !== null) {
+    try {
+      const { notify } = await import('./notifications');
+      await notify({
+        userId: ownerId,
+        kind: 'session_logged_out',
+        title: `Session "${label}" keluar dari WhatsApp`,
+        body: `Keluar dari HP. Session akan dihapus otomatis dalam 5 menit bila tidak ditautkan ulang. Tautkan lagi dari halaman Sessions untuk membatalkan.`,
+        link: '/sessions',
+      });
+    } catch {
+      // Notifikasi gagal tidak boleh menggagalkan jadwal.
+    }
+  }
+  emit({
+    event: 'logged_out',
+    sessionId,
+    timestamp: new Date().toISOString(),
+    data: { reason: 'logout', deleteAt, retentionMs: waitMs },
+  } as SessionEvent);
+  live.cleanupDeleteAt = deleteAt;
+  live.cleanupTimer = setTimeout(() => {
+    live.cleanupTimer = null;
+    live.cleanupDeleteAt = null;
+    void (async () => {
+      // Cek ulang: batal bila status sudah bukan logged_out (user start ulang).
+      let current: { status: string; label: string; ownerId: number | null } | null = null;
+      try {
+        current = await prisma.session.findUnique({
+          where: { id: sessionId },
+          select: { status: true, label: true, ownerId: true },
+        });
+      } catch {
+        return;
+      }
+      if (!current || current.status !== 'logged_out') return;
+      const gone = await deleteSessionRecord(sessionId);
+      if (!gone) return;
+      emit({ event: 'stopped', sessionId, timestamp: new Date().toISOString(), data: { logout: true, auto: true } });
+      if (current.ownerId !== null) {
+        try {
+          const { notify } = await import('./notifications');
+          await notify({
+            userId: current.ownerId,
+            kind: 'session_deleted',
+            title: `Session "${current.label}" dihapus otomatis`,
+            body: 'Session yang keluar dari WhatsApp dan tidak ditautkan ulang dalam 5 menit telah dihapus beserta riwayat pesannya. Buat session baru bila masih dibutuhkan.',
+            link: '/sessions',
+          });
+        } catch {
+          // Abaikan.
+        }
+      }
+    })();
+  }, waitMs);
+  if (typeof live.cleanupTimer.unref === 'function') live.cleanupTimer.unref();
+}
+
 /** Mulai (atau mulai ulang) koneksi WA untuk sebuah session. */
 export async function start(sessionId: string): Promise<{ status: string }> {
   assertValidSessionId(sessionId);
@@ -289,6 +455,12 @@ export async function start(sessionId: string): Promise<{ status: string }> {
   live.starting = true;
   live.stopping = false;
   clearReconnect(live);
+  // User menautkan ulang (start manual): batalkan jadwal hapus logged_out.
+  if (live.cleanupTimer) {
+    clearTimeout(live.cleanupTimer);
+    live.cleanupTimer = null;
+  }
+  live.cleanupDeleteAt = null;
   live.qrPng = null;
   live.qrRaw = null;
 
@@ -420,6 +592,27 @@ async function handleConnectionUpdate(
     const waName: string | null = typeof me?.name === 'string' ? me.name : null;
     await setDbStatus(sessionId, 'open', { phone, waName });
     emit({ event: 'connected', sessionId, timestamp, data: { phone, waName } });
+    // Notifikasi inbox ke owner (session tersambung).
+    void (async () => {
+      try {
+        const rec = await prisma.session.findUnique({
+          where: { id: sessionId },
+          select: { label: true, ownerId: true },
+        });
+        if (rec?.ownerId) {
+          const { notify } = await import('./notifications');
+          await notify({
+            userId: rec.ownerId,
+            kind: 'session_connected',
+            title: `Session "${rec.label}" terhubung`,
+            body: phone ? `Nomor ${phone} berhasil ditautkan.` : 'Perangkat berhasil ditautkan.',
+            link: '/sessions',
+          });
+        }
+      } catch {
+        // Abaikan.
+      }
+    })();
     return;
   }
 
@@ -440,6 +633,8 @@ async function handleConnectionUpdate(
       live.sock = null;
       await setDbStatus(sessionId, 'logged_out');
       emit({ event: 'logged_out', sessionId, timestamp, data: { reason: err?.message ?? 'logout' } });
+      // Jadwalkan hapus otomatis setelah jeda (batal bila session hidup lagi).
+      void scheduleLoggedOutCleanup(sessionId);
       return;
     }
 
@@ -555,10 +750,18 @@ export async function cancelPairing(sessionId: string): Promise<{ cancelled: boo
 /**
  * Hentikan session.
  * logout=false → stopped, kredensial disimpan (bisa start tanpa scan).
+ *   TIDAK dihapus otomatis (hanya logged_out yang auto-hapus).
  * logout=true → logout dari WA + hapus kredensial + hapus record + pesan.
  */
 export async function stop(sessionId: string, logout: boolean): Promise<{ stopped: boolean }> {
   assertValidSessionId(sessionId);
+
+  if (logout) {
+    await deleteSessionRecord(sessionId);
+    emit({ event: 'stopped', sessionId, timestamp: new Date().toISOString(), data: { logout } });
+    return { stopped: true };
+  }
+
   const live = getLive(sessionId);
   live.stopping = true;
   clearReconnect(live);
@@ -594,26 +797,8 @@ export async function stop(sessionId: string, logout: boolean): Promise<{ stoppe
   live.pairingExpiresAt = null;
 
   const timestamp = new Date().toISOString();
-  if (logout) {
-    try {
-      await prisma.message.deleteMany({ where: { sessionId } });
-    } catch {
-      // Abaikan bila tabel/record bermasalah.
-    }
-    try {
-      await prisma.session.delete({ where: { id: sessionId } });
-    } catch {
-      // Record mungkin sudah tidak ada.
-    }
-    try {
-      await rm(sessionFolder(sessionId), { recursive: true, force: true });
-    } catch {
-      // Abaikan bila folder tidak ada.
-    }
-    getStore().sessions.delete(sessionId);
-  } else {
-    await setDbStatus(sessionId, 'stopped');
-  }
+  // logout=true sudah ditangani deleteSessionRecord di atas (return awal).
+  await setDbStatus(sessionId, 'stopped');
   emit({ event: 'stopped', sessionId, timestamp, data: { logout } });
   return { stopped: true };
 }
@@ -627,6 +812,8 @@ export async function getStatus(sessionId: string): Promise<{
   hasQr: boolean;
   hasPairing: boolean;
   live: boolean;
+  /** ISO waktu hapus otomatis; hanya diisi bila logged_out + terjadwal. */
+  deleteAt: string | null;
 }> {
   assertValidSessionId(sessionId);
   const live = getLive(sessionId);
@@ -645,6 +832,7 @@ export async function getStatus(sessionId: string): Promise<{
     hasQr: live.qrPng !== null,
     hasPairing: pairingActive,
     live: live.sock !== null,
+    deleteAt: record.status === 'logged_out' ? live.cleanupDeleteAt : null,
   };
 }
 
@@ -670,7 +858,9 @@ export function hasCredentials(sessionId: string): boolean {
 
 /**
  * Restore saat boot: start ulang bertahap (jeda 1 detik) semua session
- * yang statusnya selain logged_out/stopped.
+ * yang statusnya selain logged_out/stopped. Session logged_out TIDAK
+ * di-start ulang — malah dijadwalkan hapus otomatis (retensi 5 menit)
+ * agar tidak menumpuk, lengkap dengan notifikasi ke owner.
  */
 export async function restoreAll(): Promise<{ restored: number; skipped: number }> {
   let restored = 0;
@@ -699,6 +889,28 @@ export async function restoreAll(): Promise<{ restored: number; skipped: number 
       skipped += 1;
     }
     await new Promise((resolve) => setTimeout(resolve, RESTORE_GAP_MS));
+  }
+  // Sweeper: session yang sudah logged_out sebelum restart ikut dijadwalkan
+  // hapus otomatis (notifikasi terkirim dari scheduleLoggedOutCleanup).
+  try {
+    const leftovers = await prisma.session.findMany({
+      where: { status: 'logged_out' },
+      select: { id: true },
+    });
+    for (const s of leftovers) {
+      try {
+        assertValidSessionId(s.id);
+      } catch {
+        continue;
+      }
+      try {
+        await scheduleLoggedOutCleanup(s.id);
+      } catch {
+        // Abaikan per-session.
+      }
+    }
+  } catch {
+    // DB bermasalah; abaikan.
   }
   return { restored, skipped };
 }

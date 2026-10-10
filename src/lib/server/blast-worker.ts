@@ -356,12 +356,36 @@ async function finishIfDone(blastId: number): Promise<void> {
     },
   });
   publishBlastProgress(blastId, { status, sent, failed, pending: 0, finished: true });
+  // Notifikasi inbox ke owner (blast selesai / sebagian gagal).
+  try {
+    const info = await prisma.blast.findUnique({
+      where: { id: blastId },
+      select: { label: true, ownerId: true, sessionId: true },
+    });
+    const targetId = info?.ownerId ?? null;
+    if (targetId) {
+      const { notify } = await import('./notifications');
+      const total = sent + failed;
+      await notify({
+        userId: targetId,
+        kind: status === 'done' ? 'blast_done' : 'blast_failed',
+        title:
+          status === 'done'
+            ? `Blast "${info?.label ?? `#${blastId}`}" selesai`
+            : `Blast "${info?.label ?? `#${blastId}`}" selesai dengan ${failed} gagal`,
+        body: `${sent} dari ${total} penerima terkirim.`,
+        link: '/blast',
+      });
+    }
+  } catch {
+    // Notifikasi gagal tidak boleh menggagalkan finish.
+  }
 }
 
 /** Siarkan progres blast ke bus live (dipakai SSE dashboard). Tak pernah melempar. */
 function publishBlastProgress(
   blastId: number,
-  stats: { sent: number; failed: number; pending: number; status?: string; finished?: boolean },
+  stats: { sent: number; failed: number; pending: number; status?: string; finished?: boolean; error?: string },
 ): void {
   try {
     const g = globalThis as unknown as {
@@ -379,6 +403,7 @@ function publishBlastProgress(
         pending: stats.pending,
         ...(stats.status ? { status: stats.status } : {}),
         ...(stats.finished ? { finished: true } : {}),
+        ...(stats.error ? { error: stats.error } : {}),
       },
     };
     for (const listener of bus.listeners) {
@@ -403,6 +428,7 @@ type BlastLiveEvent = {
     pending: number;
     status?: string;
     finished?: boolean;
+    error?: string;
   };
 };
 
@@ -429,6 +455,31 @@ async function runLoop(blastId: number): Promise<void> {
         where: { id: blastId },
         data: { status: 'paused', error: 'Session tidak open; campaign dijeda otomatis.' },
       });
+      publishBlastProgress(blastId, {
+        sent: 0,
+        failed: 0,
+        pending: 0,
+        status: 'paused',
+        error: 'Session tidak open; campaign dijeda otomatis.',
+      });
+      try {
+        const info = await prisma.blast.findUnique({
+          where: { id: blastId },
+          select: { label: true, ownerId: true },
+        });
+        if (info?.ownerId) {
+          const { notify } = await import('./notifications');
+          await notify({
+            userId: info.ownerId,
+            kind: 'blast_failed',
+            title: `Blast "${info.label}" dijeda otomatis`,
+            body: 'Session tidak terhubung. Sambungkan ulang session lalu lanjutkan dari halaman Blast.',
+            link: '/blast',
+          });
+        }
+      } catch {
+        // Abaikan.
+      }
       return;
     }
 

@@ -47,20 +47,36 @@ export type LiveBlastEvent = {
   };
 };
 
+export type LiveNotificationEvent = {
+  event: 'notification';
+  userId: number;
+  timestamp: string;
+  data: {
+    id: string;
+    userId: number;
+    kind: string;
+    title: string;
+    body: string | null;
+    link: string | null;
+    createdAt: string;
+  };
+};
+
 export function useLiveEvents(opts: {
   onSession?: (ev: LiveSessionEvent) => void;
   onBlast?: (ev: LiveBlastEvent) => void;
+  onNotification?: (ev: LiveNotificationEvent) => void;
   onPoll?: () => void;
   fallbackMs?: number;
   pollMs?: number;
   enabled?: boolean;
 }): { connected: boolean; reconnect: () => void } {
-  const { onSession, onBlast, onPoll, fallbackMs = 8000, pollMs = 5000, enabled = true } = opts;
+  const { onSession, onBlast, onNotification, onPoll, fallbackMs = 8000, pollMs = 5000, enabled = true } = opts;
   const [connected, setConnected] = useState(false);
   const [seq, setSeq] = useState(0);
-  const cbRef = useRef({ onSession, onBlast, onPoll });
+  const cbRef = useRef({ onSession, onBlast, onNotification, onPoll });
   useEffect(() => {
-    cbRef.current = { onSession, onBlast, onPoll };
+    cbRef.current = { onSession, onBlast, onNotification, onPoll };
   });
 
   useEffect(() => {
@@ -106,6 +122,14 @@ export function useLiveEvents(opts: {
         markAlive();
         try {
           cbRef.current.onBlast?.(JSON.parse((e as MessageEvent).data) as LiveBlastEvent);
+        } catch {
+          // Abaikan.
+        }
+      });
+      source.addEventListener('notification', (e) => {
+        markAlive();
+        try {
+          cbRef.current.onNotification?.(JSON.parse((e as MessageEvent).data) as LiveNotificationEvent);
         } catch {
           // Abaikan.
         }

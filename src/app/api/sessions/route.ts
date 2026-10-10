@@ -97,18 +97,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     },
   });
 
-  // Mulai koneksi langsung agar QR/pairing tersedia.
-  const { start } = await import('@/lib/server/session-manager');
-  try {
-    await start(created.id);
-  } catch (err) {
-    return fail(
-      `Session dibuat, tetapi gagal memulai koneksi: ${err instanceof Error ? err.message : 'error'}`,
-      201,
-    );
-  }
-  const fresh = await prisma.session.findUnique({ where: { id: created.id } });
-  return ok({ session: fresh }, 201);
+  // Session baru TIDAK auto-start: user menekan "Tautkan perangkat" dulu
+  // (baru start di situ) agar QR tidak basi sebelum dilihat.
+  return ok({ session: created }, 201);
 });
 
 export async function OPTIONS(req: NextRequest): Promise<Response> {

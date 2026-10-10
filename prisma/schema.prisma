@@ -67,6 +67,7 @@ model User {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   sessions       Session[]
   passwordResets PasswordReset[]
+  notifications  Notification[]
 
   @@map("users")
 }
@@ -105,6 +106,30 @@ model SystemSetting {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("system_settings")
+}
+
+enum NotificationKind {
+  session_logged_out
+  session_deleted
+  session_connected
+  blast_done
+  blast_failed
+  broadcast
+}
+
+model Notification {
+  id        BigInt           @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  title     String           @db.VarChar(255)
+  body      String?          @db.Text
+  link      String?          @db.VarChar(512)
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }
 
 model Message {

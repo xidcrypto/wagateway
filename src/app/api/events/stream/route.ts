@@ -99,6 +99,14 @@ export async function GET(req: NextRequest): Promise<Response> {
       unsubscribe = onLiveEvent((ev) => {
         void (async () => {
           try {
+            // Inbox pribadi duluan: shape { event:'notification', userId, ... }.
+            // Cek via cast mentah (union LiveWireEvent tak memuatnya di bus).
+            const raw = ev as unknown as { event?: string; userId?: number };
+            if (raw.event === 'notification') {
+              if (raw.userId !== userId) return;
+              send('notification', ev);
+              return;
+            }
             if (isSessionEvent(ev)) {
               await refreshOwned();
               if (!admin && !owned.has(ev.sessionId)) return;

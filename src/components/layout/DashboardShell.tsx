@@ -30,6 +30,7 @@ import { toast } from '@/components/ui/Toast';
 import { StatusOrb } from '@/components/ui/StatusOrb';
 import { ThemeIconButton } from '@/components/layout/ThemeToggle';
 import { CommandPalette } from '@/components/layout/CommandPalette';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { cn } from '@/lib/client/cn';
 
 type NavItem = { href: string; label: string; icon: ReactNode; adminOnly?: boolean };
@@ -70,6 +71,7 @@ const TITLES: Record<string, string> = {
   '/admin/audit': 'Audit pesan',
   '/admin/web': 'Pengaturan web',
   '/settings': 'Pengaturan',
+  '/notifikasi': 'Notifikasi',
 };
 
 type MeUser = {
@@ -379,8 +381,9 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             >
               <Menu size={20} />
             </button>
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-            <div className="flex min-w-0 flex-1 justify-center sm:justify-start">
+            <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+            {/* Desktop: bar pencarian penuh. Mobile: ikon saja (hemat ruang topbar). */}
+            <div className="hidden min-w-0 flex-1 justify-start sm:flex">
               <button
                 type="button"
                 aria-label="Pencarian cepat (Ctrl K)"
@@ -390,11 +393,23 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               >
                 <Search size={15} />
                 <span className="flex-1 text-left">Cari…</span>
-                <kbd className="hidden rounded border border-border bg-muted px-1.5 font-mono text-[11px] sm:inline-flex">
+                <kbd className="hidden rounded border border-border bg-muted px-1.5 font-mono text-[11px] lg:inline-flex">
                   Ctrl K
                 </kbd>
               </button>
             </div>
+            <div className="flex min-w-0 flex-1 justify-end sm:hidden">
+              <button
+                type="button"
+                aria-label="Pencarian cepat"
+                title="Pencarian cepat"
+                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+                className="pressable inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2.5 text-foreground hover:bg-muted"
+              >
+                <Search size={18} />
+              </button>
+            </div>
+            <NotificationBell />
             <ThemeIconButton />
             <div className="relative">
               <button

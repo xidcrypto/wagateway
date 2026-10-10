@@ -335,6 +335,8 @@ export type SessionStatus = {
   hasQr: boolean;
   hasPairing: boolean;
   live: boolean;
+  /** ISO waktu hapus otomatis; hanya diisi bila logged_out + terjadwal. */
+  deleteAt: string | null;
 };
 
 export function getSessionStatus(sessionId: string): Promise<SessionStatus> {
@@ -1087,4 +1089,52 @@ export function rotateMyApiKey(): Promise<{ apiKey: string; rotated: boolean }> 
 /** Hapus API key milik sendiri. */
 export function deleteMyApiKey(): Promise<{ deleted: boolean }> {
   return api('/api/me/api-key', { method: 'DELETE' });
+}
+
+export type NotificationItem = {
+  id: string;
+  userId: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+/** List notifikasi inbox milik sendiri (terbaru dulu). */
+export function listNotifications(
+  limit = 30,
+  offset = 0,
+): Promise<{ notifications: NotificationItem[]; total: number; unread: number; limit: number; offset: number }> {
+  return api(`/api/notifications?limit=${limit}&offset=${offset}`);
+}
+
+/** Tandai satu notifikasi sebagai dibaca. */
+export function markNotificationRead(id: string): Promise<{ read: boolean }> {
+  return api('/api/notifications/read', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+/** Tandai semua notifikasi sebagai dibaca. */
+export function markAllNotificationsRead(): Promise<{ read: number }> {
+  return api('/api/notifications/read', {
+    method: 'POST',
+    body: JSON.stringify({ all: true }),
+  });
+}
+
+/** Broadcast admin ke semua user aktif atau user tertentu. */
+export function broadcastNotification(body: {
+  title: string;
+  body?: string;
+  link?: string;
+  userIds?: number[];
+}): Promise<{ sent: number }> {
+  return api('/api/admin/notifications', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }

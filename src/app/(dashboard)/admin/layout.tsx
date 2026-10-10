@@ -22,7 +22,7 @@ const TITLES: Record<string, { title: string; desc: string }> = {
   },
   '/admin/web': {
     title: 'Pengaturan web',
-    desc: 'Nama web, pendaftaran user, SMTP, dan tes email.',
+    desc: 'Nama web, pendaftaran user, SMTP, tes email, dan pengumuman ke user.',
   },
 };
 
