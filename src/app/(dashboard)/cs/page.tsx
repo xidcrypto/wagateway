@@ -2,13 +2,14 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Headset, ImagePlus, Plus, Send } from 'lucide-react';
+import { Headset, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { TextArea, TextInput } from '@/components/ui/Fields';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { TicketThread } from '@/components/support/TicketThread';
+import { TicketComposer } from '@/components/support/TicketComposer';
 import { toast } from '@/components/ui/Toast';
 import {
   useLiveEvents,
@@ -44,9 +45,6 @@ const STATUS_CLASS: Record<string, string> = {
   answered: 'bg-status-open/15 text-status-open border-status-open/40',
   closed: 'bg-muted text-muted-foreground border-border',
 };
-
-/** Batas upload client (2 MB, sama dengan server; server tetap final). */
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function StatusPill({ status }: { status: string }) {
   return (
@@ -103,14 +101,12 @@ function CsContent() {
   const [subject, setSubject] = useState('');
   const [firstMsg, setFirstMsg] = useState('');
   const [creating, setCreating] = useState(false);
-  const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const typingSentAt = useRef(0);
   const selectedRef = useRef<number | null>(null);
@@ -263,7 +259,6 @@ function CsContent() {
   }, []);
 
   function openTicket(id: number): void {
-    setReply('');
     setDetailError(null);
     setPeerTyping(false);
     router.push(`/cs?id=${id}`);
@@ -272,7 +267,6 @@ function CsContent() {
   function backToList(): void {
     setDetail(null);
     setDetailError(null);
-    setReply('');
     setPeerTyping(false);
     router.push('/cs');
   }
@@ -303,13 +297,12 @@ function CsContent() {
     }
   }
 
-  async function handleReply(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!detail || !reply.trim()) return;
+  /** Kirim teks (dari composer). */
+  async function sendText(text: string): Promise<void> {
+    if (!detail || !text || sending) return;
     setSending(true);
     try {
-      const r = await replyTicket(detail.id, reply.trim());
-      setReply('');
+      const r = await replyTicket(detail.id, text);
       // Optimistic via respons (SSE ticket.message jadi dedup).
       setDetail((prev) => {
         if (!prev || prev.id !== detail.id) return prev;
@@ -324,30 +317,12 @@ function CsContent() {
     }
   }
 
-  /** Beri tahu CS "user sedang mengetik" (debounce 3 dtk, ikut mengetik gambar). */
-  function handleTypingPing(): void {
-    if (!selectedId || detail?.status === 'closed') return;
-    const now = Date.now();
-    if (now - typingSentAt.current < 3000) return;
-    typingSentAt.current = now;
-    sendTicketTyping(selectedId).catch(() => {});
-  }
-
-  async function handleFile(file: File): Promise<void> {
-    if (!detail || detail.status === 'closed') return;
-    if (!file.type.startsWith('image/')) {
-      toast('error', 'Hanya file gambar (jpg, png, webp, gif).');
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast('error', 'Gambar kebesaran (maksimal 2 MB).');
-      return;
-    }
+  /** Kirim gambar + caption (dari composer, setelah pratinjau). */
+  async function sendImage(file: File, caption: string): Promise<void> {
+    if (!detail || detail.status === 'closed' || uploading) return;
     setUploading(true);
     try {
-      const caption = reply.trim().slice(0, 500);
       const r = await uploadTicketImage(detail.id, file, caption || undefined);
-      if (caption) setReply('');
       setDetail((prev) => {
         if (!prev || prev.id !== detail.id) return prev;
         if (prev.messages.some((x) => x.id === r.message.id)) return prev;
@@ -359,8 +334,16 @@ function CsContent() {
       toast('error', err instanceof ApiError ? err.message : 'Gagal mengunggah gambar.');
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
+  }
+
+  /** Beri tahu CS "user sedang mengetik" (debounce 3 dtk, ikut mengetik gambar). */
+  function handleTypingPing(): void {
+    if (!selectedId || detail?.status === 'closed') return;
+    const now = Date.now();
+    if (now - typingSentAt.current < 3000) return;
+    typingSentAt.current = now;
+    sendTicketTyping(selectedId).catch(() => {});
   }
 
   async function handleClose(): Promise<void> {
@@ -516,56 +499,16 @@ function CsContent() {
                   Tiket ini sudah ditutup. Buat tiket baru bila masih butuh bantuan.
                 </p>
               ) : (
-                <form onSubmit={(e) => void handleReply(e)} className="mt-4 flex flex-col gap-2">
-                  <TextArea
-                    aria-label="Tulis balasan"
-                    value={reply}
-                    onChange={(e) => {
-                      setReply(e.target.value);
-                      handleTypingPing();
-                    }}
-                    placeholder="Tulis balasan… (maks 2000 char, gambar ≤2 MB)"
-                    maxLength={2000}
-                    rows={3}
-                    required={false}
-                  />
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    aria-label="Lampirkan gambar"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void handleFile(f);
-                    }}
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setConfirmClose(true)}
-                      >
-                        Tutup tiket
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        disabled={uploading}
-                        onClick={() => fileRef.current?.click()}
-                        aria-label="Lampirkan gambar (maks 2 MB)"
-                      >
-                        <ImagePlus size={14} /> {uploading ? 'Mengunggah…' : 'Gambar'}
-                      </Button>
-                    </span>
-                    <Button type="submit" size="sm" disabled={sending || (!reply.trim() && !uploading)}>
-                      <Send size={14} /> {sending ? 'Mengirim…' : 'Kirim'}
-                    </Button>
-                  </div>
-                </form>
+                <TicketComposer
+                  placeholder="Tulis balasan… (maks 2000 char, gambar ≤2 MB)"
+                  sending={sending}
+                  uploading={uploading}
+                  showClose
+                  onCloseTicket={() => setConfirmClose(true)}
+                  onSendText={(text) => void sendText(text)}
+                  onSendImage={(file, caption) => void sendImage(file, caption)}
+                  onTypingPing={handleTypingPing}
+                />
               )}
             </Card>
           )}

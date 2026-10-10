@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, Check, CheckCheck } from 'lucide-react';
 import type { TicketMessage } from '@/lib/client/api';
-import { Modal } from '@/components/ui/Modal';
+import { TicketImage } from '@/components/support/TicketImage';
 import { cn } from '@/lib/client/cn';
 
 function timeAgo(iso: string): string {
@@ -52,7 +52,6 @@ export function TicketThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickBottom, setStickBottom] = useState(true);
   const [hasNew, setHasNew] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
   const prevCount = useRef(messages.length);
 
   // Auto-scroll cerdas: ikut ke bawah hanya bila user sedang di dasar.
@@ -98,16 +97,19 @@ export function TicketThread({
         className="flex max-h-[52vh] min-h-48 flex-col gap-2.5 overflow-y-auto rounded-control border border-border bg-background p-3"
       >
         {messages.map((m) => {
-          // Bubble sendiri: user biasa = kanan, admin = kiri (CS).
+          // Bubble sendiri SELALU kanan (user & admin), lawan kiri — jadi
+          // jelas siapa pengirim di kedua sisi, plus label eksplisit.
           const mine = isAdminView ? m.fromAdmin : !m.fromAdmin;
-          const alignRight = !isAdminView && mine;
           // Centang biru: pesan sendiri yang dibuat SEBELUM lawan terakhir membaca.
           const read =
             Number.isFinite(peerReadMs) &&
             peerReadMs > 0 &&
             new Date(m.createdAt).getTime() <= peerReadMs;
+          const senderLabel = m.fromAdmin
+            ? 'CS'
+            : (m.sender?.fullName || m.sender?.username || (isAdminView ? 'User' : 'Kamu'));
           return (
-            <div key={m.id} className={cn('flex', alignRight ? 'justify-end' : 'justify-start')}>
+            <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
               <div
                 className={cn(
                   'max-w-[85%] rounded-card border px-3.5 py-2.5',
@@ -117,26 +119,11 @@ export function TicketThread({
                 )}
               >
                 <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                  {m.fromAdmin ? 'CS' : (m.sender?.fullName || m.sender?.username || 'Kamu')}
+                  {mine ? `Kamu${m.fromAdmin ? ' (CS)' : ''}` : senderLabel}
                   {' · '}
                   <time>{timeAgo(m.createdAt)}</time>
                 </p>
-                {m.mediaUrl ? (
-                  <button
-                    type="button"
-                    onClick={() => setLightbox(m.mediaUrl)}
-                    aria-label="Perbesar gambar"
-                    className="pressable mb-1.5 block overflow-hidden rounded-control border border-border"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={m.mediaUrl}
-                      alt="Lampiran tiket"
-                      loading="lazy"
-                      className="max-h-48 w-auto object-cover"
-                    />
-                  </button>
-                ) : null}
+                {m.mediaUrl ? <TicketImage url={m.mediaUrl} /> : null}
                 {m.body ? (
                   <p className="whitespace-pre-wrap break-words text-sm leading-6">{m.body}</p>
                 ) : null}
@@ -177,13 +164,6 @@ export function TicketThread({
         >
           <ArrowDown size={13} /> Pesan baru
         </button>
-      ) : null}
-
-      {lightbox ? (
-        <Modal title="Lampiran" onClose={() => setLightbox(null)} wide>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Lampiran tiket" className="max-h-[70vh] w-full rounded-control object-contain" />
-        </Modal>
       ) : null}
     </div>
   );
