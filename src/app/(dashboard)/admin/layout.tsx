@@ -20,6 +20,10 @@ const TITLES: Record<string, { title: string; desc: string }> = {
     title: 'Audit pesan',
     desc: 'Audit pesan lintas user dengan filter dan paginasi.',
   },
+  '/admin/tickets': {
+    title: 'Tiket CS',
+    desc: 'Tiket bantuan dari user: baca, balas, dan ubah status.',
+  },
   '/admin/web': {
     title: 'Pengaturan web',
     desc: 'Nama web, pendaftaran user, SMTP, tes email, dan pengumuman ke user.',

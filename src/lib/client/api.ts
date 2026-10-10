@@ -1138,3 +1138,116 @@ export function broadcastNotification(body: {
     body: JSON.stringify(body),
   });
 }
+
+export type TicketListItem = {
+  id: number;
+  subject: string;
+  status: 'open' | 'answered' | 'closed';
+  hasUnread: boolean;
+  lastFromAdmin: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TicketMessage = {
+  id: string;
+  fromAdmin: boolean;
+  body: string;
+  createdAt: string;
+  sender: { id: number; username: string; fullName: string } | null;
+};
+
+export type TicketDetail = {
+  id: number;
+  subject: string;
+  status: 'open' | 'answered' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  user: { id: number; username: string; fullName: string };
+  messages: TicketMessage[];
+};
+
+/** Daftar tiket milik sendiri. */
+export function listTickets(): Promise<{ tickets: TicketListItem[] }> {
+  return api('/api/tickets');
+}
+
+/** Buat tiket baru (pesan pertama). */
+export function createTicket(
+  subject: string,
+  message: string,
+): Promise<{ ticket: Pick<TicketDetail, 'id' | 'subject' | 'status' | 'createdAt'>; preview: string }> {
+  return api('/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify({ subject, message }),
+  });
+}
+
+/** Detail + thread tiket milik sendiri. */
+export function getTicket(id: number): Promise<{ ticket: TicketDetail }> {
+  return api(`/api/tickets/${id}`);
+}
+
+/** Balas tiket milik sendiri (409 bila sudah ditutup). */
+export function replyTicket(id: number, message: string): Promise<{ replied: boolean }> {
+  return api(`/api/tickets/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+/** Tutup tiket milik sendiri. */
+export function closeTicket(id: number): Promise<{ closed: boolean }> {
+  return api(`/api/tickets/${id}/close`, { method: 'POST' });
+}
+
+export type AdminTicketListItem = TicketListItem & {
+  lastExcerpt: string | null;
+  user: { id: number; username: string; fullName: string };
+};
+
+export type AdminTicketDetail = TicketDetail & { userId: number };
+
+export type AdminTicketFilter = {
+  status?: '' | 'open' | 'answered' | 'closed';
+  limit?: number;
+  offset?: number;
+};
+
+/** Semua tiket semua user (admin): filter status + paginasi. */
+export function listAdminTickets(
+  filter: AdminTicketFilter = {},
+): Promise<{ tickets: AdminTicketListItem[]; total: number; limit: number; offset: number }> {
+  const params = new URLSearchParams();
+  if (filter.status) params.set('status', filter.status);
+  params.set('limit', String(filter.limit ?? 20));
+  params.set('offset', String(filter.offset ?? 0));
+  return api(`/api/admin/tickets?${params.toString()}`);
+}
+
+/** Detail tiket siapa pun (admin). */
+export function getAdminTicket(id: number): Promise<{ ticket: AdminTicketDetail }> {
+  return api(`/api/admin/tickets/${id}`);
+}
+
+/** Admin membalas tiket (otomatis answered; closed ikut terbuka). */
+export function replyAdminTicket(
+  id: number,
+  message: string,
+): Promise<{ replied: boolean; reopened: boolean }> {
+  return api(`/api/admin/tickets/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+/** Admin ubah status tiket manual. */
+export function setAdminTicketStatus(
+  id: number,
+  status: 'open' | 'answered' | 'closed',
+): Promise<{ ticket: { id: number; status: string } }> {
+  return api(`/api/admin/tickets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}

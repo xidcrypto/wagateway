@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   Gauge,
   Globe,
+  Headset,
   Inbox,
   LayoutDashboard,
   LayoutGrid,
@@ -44,6 +45,7 @@ const NAV: NavItem[] = [
   { href: '/contacts', label: 'Kontak', icon: <BookUser size={19} /> },
   { href: '/blast', label: 'Blast', icon: <Megaphone size={19} /> },
   { href: '/docs', label: 'API Docs', icon: <BookOpenText size={19} /> },
+  { href: '/cs', label: 'Hubungi CS', icon: <Headset size={19} /> },
   { href: '/settings', label: 'Pengaturan', icon: <Settings size={19} /> },
 ];
 
@@ -53,6 +55,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: '/admin/users', label: 'Pengguna', icon: <Users size={19} />, adminOnly: true },
   { href: '/admin/sessions', label: 'Semua session', icon: <Smartphone size={19} />, adminOnly: true },
   { href: '/admin/audit', label: 'Audit pesan', icon: <Inbox size={19} />, adminOnly: true },
+  { href: '/admin/tickets', label: 'Tiket CS', icon: <Headset size={19} />, adminOnly: true },
   { href: '/admin/web', label: 'Pengaturan web', icon: <Globe size={19} />, adminOnly: true },
 ];
 
@@ -69,7 +72,9 @@ const TITLES: Record<string, string> = {
   '/admin/users': 'Pengguna',
   '/admin/sessions': 'Semua session',
   '/admin/audit': 'Audit pesan',
+  '/admin/tickets': 'Tiket CS',
   '/admin/web': 'Pengaturan web',
+  '/cs': 'Hubungi CS',
   '/settings': 'Pengaturan',
   '/notifikasi': 'Notifikasi',
 };

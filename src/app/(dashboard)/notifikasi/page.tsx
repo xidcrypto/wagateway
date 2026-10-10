@@ -44,6 +44,10 @@ function kindLabel(kind: string): string {
       return 'Blast gagal';
     case 'broadcast':
       return 'Pengumuman';
+    case 'ticket_new':
+      return 'Tiket CS';
+    case 'ticket_reply':
+      return 'Balasan CS';
     default:
       return kind;
   }

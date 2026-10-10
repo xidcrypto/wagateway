@@ -68,6 +68,8 @@ model User {
   sessions       Session[]
   passwordResets PasswordReset[]
   notifications  Notification[]
+  supportTickets SupportTicket[]
+  supportSent    SupportMessage[] @relation("SupportSender")
 
   @@map("users")
 }
@@ -115,6 +117,8 @@ enum NotificationKind {
   blast_done
   blast_failed
   broadcast
+  ticket_new
+  ticket_reply
 }
 
 model Notification {
@@ -184,4 +188,41 @@ model BlastRecipient {
 
   @@index([blastId, status])
   @@map("blast_recipients")
+}
+
+enum TicketStatus {
+  open
+  answered
+  closed
+}
+
+model SupportTicket {
+  id             Int          @id @default(autoincrement())
+  userId         Int          @map("user_id")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject        String       @db.VarChar(255)
+  status         TicketStatus @default(open)
+  userLastReadAt DateTime?   @map("user_last_read_at")
+  adminLastReadAt DateTime?  @map("admin_last_read_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  messages       SupportMessage[]
+
+  @@index([userId, status, updatedAt])
+  @@index([status, updatedAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        BigInt        @id @default(autoincrement())
+  ticketId  Int           @map("ticket_id")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  Int?          @map("sender_id")
+  sender    User?         @relation("SupportSender", fields: [senderId], references: [id], onDelete: SetNull)
+  fromAdmin Boolean       @default(false) @map("from_admin")
+  body      String        @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
 }
