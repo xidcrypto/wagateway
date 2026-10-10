@@ -13,8 +13,8 @@ export default function MessageDonutInner({
 }) {
   const total = inbound + outbound;
   const rows = [
-    { name: 'Masuk', value: inbound, color: '#2DD4BF' },
-    { name: 'Keluar', value: outbound, color: '#5B7CFA' },
+    { name: 'Masuk', value: inbound, color: '#16a34a' },
+    { name: 'Keluar', value: outbound, color: dark ? '#fafafa' : '#18181b' },
   ];
 
   if (total <= 0) {
@@ -62,7 +62,7 @@ export default function MessageDonutInner({
               </div>
               <div
                 className="mt-1 h-1.5 overflow-hidden rounded-full"
-                style={{ background: dark ? 'rgba(255,255,255,.08)' : '#E3E8F0' }}
+                style={{ background: dark ? '#27272a' : '#e4e4e7' }}
               >
                 <div
                   className="h-full rounded-full transition-[width]"

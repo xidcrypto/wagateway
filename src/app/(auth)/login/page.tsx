@@ -73,60 +73,27 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="aurora grid min-h-screen lg:grid-cols-2">
-      {/* Kolom nilai produk (desktop) */}
-      <div className="hidden flex-col justify-center gap-5 px-12 lg:flex">
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-panel bg-gradient-to-br from-primary to-gradient-to font-display text-3xl font-bold text-white shadow-2">
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-control bg-primary font-display text-xl font-bold text-primary-foreground">
             {siteName.trim().charAt(0).toUpperCase() || 'P'}
           </span>
-          <h1 className="font-display mt-5 max-w-md text-4xl font-bold leading-tight">
-            {siteName}
-          </h1>
-          <p className="mt-3 max-w-md text-base leading-7 text-muted-foreground">
-            {siteTagline}
-          </p>
-          <ul className="mt-6 flex max-w-md flex-col gap-3 text-sm text-muted-foreground">
-            {[
-              'Pantau semua koneksi WhatsApp dalam satu layar.',
-              'Kirim pesan, kelola grup, dan jalankan blast terjadwal.',
-              'Webhook real-time dengan tanda tangan HMAC.',
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2.5">
-                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-status-open" />
-                <span className="leading-6">{t}</span>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      </div>
-
-      {/* Kolom form */}
-      <div className="relative flex items-center justify-center px-4 py-10">
-        <div className="absolute right-4 top-4">
-          <ThemeIconButton />
+          <span className="text-lg font-semibold tracking-tight">{siteName}</span>
+          <div className="absolute right-4 top-4">
+            <ThemeIconButton />
+          </div>
         </div>
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="w-full max-w-sm rounded-panel border border-border bg-card p-6 shadow-3 sm:p-7"
+          className="rounded-card border border-border bg-card p-6 shadow-1"
         >
-          <div className="flex items-center gap-3 lg:hidden">
-            <span className="flex h-10 w-10 items-center justify-center rounded-card bg-gradient-to-br from-primary to-gradient-to font-display text-xl font-bold text-white">
-              {siteName.trim().charAt(0).toUpperCase() || 'P'}
-            </span>
-            <div>
-              <h1 className="font-display text-xl font-bold">{siteName}</h1>
-              <p className="text-[13px] text-muted-foreground">{siteTagline}</p>
-            </div>
-          </div>
-          <h2 className="font-display mt-1 hidden text-2xl font-bold lg:block">Masuk</h2>
-          <p className="mt-1 hidden text-sm text-muted-foreground lg:block">
-            Kelola gateway WhatsApp milikmu.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Masuk</h1>
+          <p className="mb-6 mt-1 text-sm text-muted-foreground">{siteTagline}</p>
 
-          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div className="relative">
               <UserRound size={16} className="pointer-events-none absolute left-3 top-[38px] text-muted-foreground" />
               <div className="[&_input]:pl-9">
@@ -180,7 +147,7 @@ export default function LoginPage() {
             <Link href="/forgot-password" className="text-muted-foreground hover:text-foreground">
               Lupa password?
             </Link>
-            <Link href="/register" className="font-semibold text-primary hover:text-primary-hover">
+            <Link href="/register" className="font-medium text-foreground hover:underline">
               Daftar akun
             </Link>
           </div>

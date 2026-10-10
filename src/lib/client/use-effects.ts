@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /** Count-up saat nilai berubah; reduced-motion langsung ke angka akhir. */
 export function useCountUp(target: number, durationMs = 900): number {
@@ -29,21 +29,4 @@ export function useCountUp(target: number, durationMs = 900): number {
 
   if (reduceMotion) return target;
   return value;
-}
-
-/** Spotlight hover: set --mx/--my dari posisi kursor. */
-export function useSpotlight<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    function onMove(e: MouseEvent): void {
-      const rect = el!.getBoundingClientRect();
-      el!.style.setProperty('--mx', `${e.clientX - rect.left}px`);
-      el!.style.setProperty('--my', `${e.clientY - rect.top}px`);
-    }
-    el.addEventListener('mousemove', onMove);
-    return () => el.removeEventListener('mousemove', onMove);
-  }, []);
-  return ref;
 }

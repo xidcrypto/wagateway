@@ -65,15 +65,16 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="aurora flex min-h-screen items-center justify-center px-4">
-      <div className="absolute right-4 top-4">
-        <ThemeIconButton />
-      </div>
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div className="absolute right-4 top-4">
+          <ThemeIconButton />
+        </div>
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="w-full max-w-sm rounded-panel border border-border bg-card p-6 shadow-3"
+        className="w-full rounded-card border border-border bg-card p-6 shadow-1"
       >
         <h1 className="font-display text-center text-2xl font-bold">Lupa Password</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
@@ -174,11 +175,12 @@ export default function ForgotPasswordPage() {
         )}
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          <Link href="/login" className="font-semibold text-primary hover:text-primary-hover">
+          <Link href="/login" className="font-medium text-foreground hover:underline">
             Kembali ke login
           </Link>
         </p>
       </motion.div>
+      </div>
     </main>
   );
 }

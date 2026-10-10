@@ -266,7 +266,7 @@ function BlastDetailView({
               className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted"
             >
               <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-primary to-gradient-to"
+                className="h-full rounded-full bg-primary"
                 initial={false}
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}

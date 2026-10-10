@@ -24,33 +24,23 @@ export default function WeeklyChartInner({
   daily: StatsDaily[];
   dark: boolean;
 }) {
-  const grid = dark ? 'rgba(255,255,255,.08)' : '#E3E8F0';
-  const tick = dark ? '#8B96AD' : '#5B6780';
+  const grid = dark ? '#27272a' : '#e4e4e7';
+  const tick = dark ? '#a1a1aa' : '#71717a';
   const data = daily.map((d) => ({ ...d, label: shortDate(d.date) }));
 
   return (
     <div className="h-56 w-full" role="img" aria-label="Grafik pesan 7 hari terakhir">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-          <defs>
-            <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2DD4BF" stopOpacity={0.45} />
-              <stop offset="100%" stopColor="#2DD4BF" stopOpacity={0.04} />
-            </linearGradient>
-            <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#5B7CFA" stopOpacity={0.45} />
-              <stop offset="100%" stopColor="#5B7CFA" stopOpacity={0.04} />
-            </linearGradient>
-          </defs>
           <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: tick, fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: tick, fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
             contentStyle={{
-              background: dark ? '#162033' : '#FFFFFF',
-              border: dark ? '1px solid rgba(255,255,255,.08)' : '1px solid #E3E8F0',
-              borderRadius: 12,
-              color: dark ? '#E6EAF2' : '#0F172A',
+              background: dark ? '#18181b' : '#FFFFFF',
+              border: dark ? '1px solid #27272a' : '1px solid #e4e4e7',
+              borderRadius: 8,
+              color: dark ? '#fafafa' : '#18181b',
               fontSize: 13,
             }}
             labelFormatter={(_, payload) => {
@@ -59,8 +49,8 @@ export default function WeeklyChartInner({
             }}
             formatter={(value, name) => [value, name === 'in' ? 'Masuk' : name === 'out' ? 'Keluar' : name]}
           />
-          <Area type="monotone" dataKey="in" name="in" stroke="#2DD4BF" strokeWidth={2} fill="url(#gIn)" />
-          <Area type="monotone" dataKey="out" name="out" stroke="#5B7CFA" strokeWidth={2} fill="url(#gOut)" />
+          <Area type="monotone" dataKey="in" name="in" stroke="#16a34a" strokeWidth={2} fill="#16a34a" fillOpacity={0.12} />
+          <Area type="monotone" dataKey="out" name="out" stroke="#18181b" strokeWidth={2} fill="#18181b" fillOpacity={dark ? 0.2 : 0.06} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

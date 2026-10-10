@@ -13,7 +13,6 @@ import { CopyButton } from '@/components/ui/Avatar';
 import { Menu, TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
 import { useVisiblePoll } from '@/lib/client/use-poll';
-import { useSpotlight } from '@/lib/client/use-effects';
 import {
   ApiError,
   cancelPairingCode,
@@ -268,7 +267,6 @@ function SessionCard({
   const [label, setLabel] = useState(session.label);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.label);
-  const cardRef = useSpotlight<HTMLDivElement>();
   const prevStatus = useRef(status?.status ?? session.status);
 
   const st = status?.status ?? session.status;
@@ -322,7 +320,7 @@ function SessionCard({
   }
 
   return (
-    <div ref={cardRef} className="spotlight rounded-card border border-border bg-card p-5 shadow-1">
+    <div className="rounded-card border border-border bg-card p-5 shadow-1">
       <div className="flex items-start gap-4">
         <StatusOrb status={st} size={56} />
         <div className="min-w-0 flex-1">

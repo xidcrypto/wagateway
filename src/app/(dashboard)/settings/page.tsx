@@ -505,7 +505,7 @@ export default function SettingsPage() {
               <div className="text-sm">
                 <p className="font-medium">Kurangi animasi</p>
                 <p className="mt-0.5 text-muted-foreground">
-                  Mematikan aurora, spotlight, pulse orb, dan count-up (selain preferensi sistem).
+                  Mematikan pulse orb dan count-up (selain preferensi sistem).
                 </p>
               </div>
               <button

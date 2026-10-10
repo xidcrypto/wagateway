@@ -10,7 +10,7 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { Button } from '@/components/ui/Button';
 import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
 import { MessageDonut } from '@/components/dashboard/MessageDonut';
-import { useCountUp, useSpotlight } from '@/lib/client/use-effects';
+import { useCountUp } from '@/lib/client/use-effects';
 import {
   ApiError,
   getMe,
@@ -32,17 +32,18 @@ function StatCard({
   accent: string;
 }) {
   const shown = useCountUp(value);
-  const ref = useSpotlight<HTMLDivElement>();
   return (
-    <div
-      ref={ref}
-      className="spotlight rounded-card border border-border bg-card p-4 shadow-1"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[13px] text-muted-foreground">{label}</span>
-        <span style={{ color: accent }}>{icon}</span>
+    <div className="rounded-card border border-border bg-card p-4 shadow-1">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <span
+          className="inline-flex h-9 w-9 items-center justify-center rounded-control"
+          style={{ backgroundColor: `${accent}1a`, color: accent }}
+        >
+          {icon}
+        </span>
       </div>
-      <p className="tnum font-display mt-2 text-3xl font-bold">{shown.toLocaleString('id-ID')}</p>
+      <p className="tnum font-display mt-2 text-2xl font-bold tracking-tight">{shown.toLocaleString('id-ID')}</p>
       <p className="tnum mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );

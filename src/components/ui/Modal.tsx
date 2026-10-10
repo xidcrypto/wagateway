@@ -17,7 +17,7 @@ export function Modal({
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="glass fixed inset-0 z-40 bg-black/55" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
         <Dialog.Content
           aria-label={title}
           className={cn(
@@ -79,7 +79,7 @@ export function ConfirmDialog({
           type="button"
           disabled={busy}
           onClick={onConfirm}
-          className="pressable min-h-10 rounded-control bg-status-failed px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-55"
+          className="pressable min-h-10 rounded-control bg-status-failed px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-55"
         >
           {busy ? 'Memproses…' : confirmLabel}
         </button>

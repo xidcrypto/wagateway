@@ -389,12 +389,12 @@ export default function ChatPage() {
                         className={cn(
                           'max-w-[85%] rounded-card px-3 py-2 text-sm',
                           out
-                            ? 'rounded-br-[4px] bg-primary text-white'
+                            ? 'rounded-br-[4px] bg-primary text-primary-foreground'
                             : 'rounded-bl-[4px] border border-border bg-background',
                         )}
                       >
                         <p className="whitespace-pre-wrap break-words">{m.textBody || `[${m.msgType}]`}</p>
-                        <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', out ? 'text-white/75' : 'text-muted-foreground')}>
+                        <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', out ? 'text-primary-foreground/75' : 'text-muted-foreground')}>
                           {new Date(m.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           {out ? <Tick status={m.failed ? 'failed' : m.status} /> : null}
                           {m.pending ? <span>mengirim…</span> : null}

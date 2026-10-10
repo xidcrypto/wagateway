@@ -5,10 +5,20 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-2: var(--card-2);
+  --color-popover: var(--popover);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
   --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
   --color-primary-hover: var(--primary-hover);
   --color-ring: var(--ring);
   --color-status-open: var(--status-open);
@@ -19,67 +29,79 @@
   --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
-  --radius-control: 8px;
-  --radius-card: 10px;
-  --radius-panel: 14px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-panel: 10px;
 }
 
-/* Light: pearl dingin — dirancang penuh, bukan invert. */
+/* Light: Zenith — putih bersih, teks nyaris hitam, tanpa gradient. */
 :root {
   color-scheme: light;
-  --background: #f5f7fb;
-  --foreground: #0f172a;
+  --background: #ffffff;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-2: #eef2f9;
-  --muted: #eef1f7;
-  --muted-foreground: #5b6780;
-  --border: #e3e8f0;
-  --primary: #5b7cfa;
-  --primary-hover: #7491ff;
-  --primary-contrast: #ffffff;
-  --gradient-to: #8b5cf6;
-  --ring: #5b7cfa;
-  --status-open: #0d9488;
-  --status-connecting: #b45309;
+  --card-2: #f4f4f5;
+  --popover: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #18181b;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --primary-hover: #3f3f46;
+  --ring: #a1a1aa;
+  --status-open: #16a34a;
+  --status-connecting: #ca8a04;
   --status-qr: #2563eb;
-  --status-closed: #64748b;
+  --status-closed: #71717a;
   --status-failed: #dc2626;
-  --shadow-1: 0 1px 2px rgb(15 23 42 / 0.06);
-  --shadow-2: 0 8px 24px -12px rgb(15 23 42 / 0.18);
-  --shadow-3: 0 24px 64px -16px rgb(15 23 42 / 0.28);
-  --glass: rgb(255 255 255 / 0.78);
-  --skeleton-base: #e7ecf4;
-  --skeleton-shine: #f7f9fd;
-  --scrollbar: #c3ccd9;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-2: 0 1px 3px rgb(0 0 0 / 0.1);
+  --shadow-3: 0 4px 16px rgb(0 0 0 / 0.12);
+  --skeleton-base: #eef0f3;
+  --scrollbar: #d4d4d8;
 }
 
-/* Dark (default): ink-navy. */
+/* Dark: Zenith — hitam pekat, kartu abu gelap, tanpa glow. */
 .dark {
   color-scheme: dark;
-  --background: #0a0f1c;
-  --foreground: #e6eaf2;
-  --card: #111827;
-  --card-2: #162033;
-  --muted: #1a2438;
-  --muted-foreground: #8b96ad;
-  --border: rgb(255 255 255 / 0.08);
-  --primary: #5b7cfa;
-  --primary-hover: #7491ff;
-  --primary-contrast: #ffffff;
-  --gradient-to: #8b5cf6;
-  --ring: #7c9aff;
-  --status-open: #2dd4bf;
-  --status-connecting: #f5b84b;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #101014;
+  --card-2: #18181b;
+  --popover: #18181b;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
+  --sidebar: #0c0c0e;
+  --sidebar-foreground: #fafafa;
+  --sidebar-accent: #1c1c20;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #1f1f23;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --primary-hover: #d4d4d8;
+  --ring: #71717a;
+  --status-open: #4ade80;
+  --status-connecting: #facc15;
   --status-qr: #60a5fa;
-  --status-closed: #94a3b8;
+  --status-closed: #a1a1aa;
   --status-failed: #f87171;
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-2: 0 8px 28px -12px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
-  --shadow-3: 0 28px 72px -16px rgb(0 0 0 / 0.65), 0 0 24px -8px rgb(91 124 250 / 0.25);
-  --glass: rgb(13 19 34 / 0.78);
-  --skeleton-base: #162033;
-  --skeleton-shine: #1f2c46;
-  --scrollbar: #2b3a56;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 1px 3px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 4px 16px rgb(0 0 0 / 0.6);
+  --skeleton-base: #18181b;
+  --scrollbar: #3f3f46;
 }
 
 html,
@@ -127,75 +149,10 @@ body {
   background: transparent;
 }
 
-/* Latar aurora statis: blur besar, opasitas rendah. */
-.aurora {
-  position: relative;
-  isolation: isolate;
-}
-.aurora::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  background:
-    radial-gradient(42rem 22rem at 12% -6%, rgb(91 124 250 / 0.16), transparent 60%),
-    radial-gradient(36rem 20rem at 88% 8%, rgb(139 92 246 / 0.13), transparent 60%),
-    radial-gradient(30rem 18rem at 55% 110%, rgb(45 212 191 / 0.08), transparent 60%);
-}
-
-.glass {
-  background: var(--glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-/* Spotlight hover: cahaya mengikuti kursor via --mx/--my. */
-.spotlight {
-  position: relative;
-}
-.spotlight::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  background: radial-gradient(
-    220px circle at var(--mx, 50%) var(--my, 50%),
-    rgb(125 155 255 / 0.14),
-    transparent 65%
-  );
-}
-.spotlight:hover::after {
-  opacity: 1;
-}
-@media (hover: none) {
-  .spotlight::after {
-    display: none;
-  }
-}
-
-/* Shimmer skeleton meniru konten. */
+/* Skeleton flat: tanpa shimmer gradient (Zenith memakai blok statis). */
 .skeleton {
-  position: relative;
-  overflow: hidden;
   background: var(--skeleton-base);
-  border-radius: 8px;
-}
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
-  animation: skeleton-shimmer 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
-}
-@keyframes skeleton-shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+  border-radius: 6px;
 }
 
 /* Micro-interaction tombol. */
@@ -296,18 +253,6 @@ body {
 
 /* Hormati reduced-motion: matikan dekoratif. */
 @media (prefers-reduced-motion: reduce) {
-  .aurora::before {
-    display: none;
-  }
-  .aurora::before {
-    display: none;
-  }
-  .spotlight::after {
-    display: none;
-  }
-  .skeleton::after {
-    animation: none;
-  }
   .orb-open::before,
   .orb-open::after {
     animation: none;
@@ -335,11 +280,6 @@ body {
 
 /* Toggle manual "Kurangi animasi" (tab Tampilan di Pengaturan):
    cerminan aturan sistem di atas, dipicu class html.reduce-motion. */
-html.reduce-motion .aurora::before,
-html.reduce-motion .spotlight::after {
-  display: none;
-}
-html.reduce-motion .skeleton::after,
 html.reduce-motion .orb-open::before,
 html.reduce-motion .orb-open::after,
 html.reduce-motion .orb-spin::before,

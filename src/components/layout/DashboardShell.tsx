@@ -19,7 +19,6 @@ import {
   MessagesSquare,
   Search,
   Settings,
-  ShieldCheck,
   Smartphone,
   User,
   Users,
@@ -93,6 +92,9 @@ function SidebarBody({
 }) {
   const items = NAV;
   const adminItems = ADMIN_NAV.filter(() => user?.role === 'admin');
+  // Seksi ala Zenith ("Utama"/"Admin"): label kecil uppercase + item flat.
+  const sections: { label: string | null; items: NavItem[] }[] = [{ label: null, items }];
+  if (adminItems.length > 0) sections.push({ label: 'Admin', items: adminItems });
   // Item admin aktif bila path persis atau di bawahnya (kecuali /admin yang exact).
   function navActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin';
@@ -108,22 +110,15 @@ function SidebarBody({
         title={collapsed ? n.label : undefined}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'relative flex min-h-11 items-center gap-3 rounded-control px-3 text-sm transition',
+          'flex min-h-10 items-center gap-3 rounded-control px-2.5 py-2 text-sm transition-colors',
           collapsed && 'justify-center px-0',
           active
-            ? 'font-semibold text-foreground'
-            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         )}
       >
-        {active ? (
-          <motion.span
-            layoutId="nav-pill"
-            transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-            className="absolute inset-0 rounded-control bg-muted"
-          />
-        ) : null}
-        <span className="relative z-10">{n.icon}</span>
-        {collapsed ? null : <span className="relative z-10">{n.label}</span>}
+        <span className="shrink-0">{n.icon}</span>
+        {collapsed ? null : <span>{n.label}</span>}
       </Link>
     );
   }
@@ -134,44 +129,45 @@ function SidebarBody({
         onClick={onNavigate}
         title={siteName}
         className={cn(
-          'flex items-center gap-2.5 px-4 pb-4 pt-5',
+          'flex h-16 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4',
           collapsed && 'justify-center px-2',
         )}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-gradient-to-br from-primary to-gradient-to font-display text-lg font-bold text-white">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-primary font-display text-base font-bold text-primary-foreground">
           {siteName.trim().charAt(0).toUpperCase() || 'P'}
         </span>
         {collapsed ? null : (
-          <span className="truncate font-display text-[17px] font-bold text-foreground">
+          <span className="truncate text-base font-semibold tracking-tight text-foreground">
             {siteName}
           </span>
         )}
       </Link>
-      <nav className="relative flex flex-1 flex-col gap-1 overflow-y-auto px-3" aria-label="Navigasi utama">
-        {items.map(renderItem)}
-        {adminItems.length > 0 ? (
-          <>
-            {collapsed ? (
-              <span className="mx-2 my-1 border-t border-border" aria-hidden="true" />
-            ) : (
-              <p className="flex items-center gap-1.5 px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <ShieldCheck size={12} /> Admin
-              </p>
-            )}
-            {adminItems.map(renderItem)}
-            {collapsed ? null : (
-              <Link
-                href="/settings"
-                onClick={onNavigate}
-                className="mt-1 flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Profil & akun ada di Pengaturan →
-              </Link>
-            )}
-          </>
+      <nav className="flex flex-1 flex-col gap-4 space-y-0 overflow-y-auto p-3" aria-label="Navigasi utama">
+        {sections.map((sec) => (
+          <div key={sec.label ?? 'utama'}>
+            {sec.label ? (
+              collapsed ? (
+                <span className="mx-2 my-1 border-t border-sidebar-border" aria-hidden="true" />
+              ) : (
+                <p className="px-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  {sec.label}
+                </p>
+              )
+            ) : null}
+            <div className="flex flex-col gap-0.5">{sec.items.map(renderItem)}</div>
+          </div>
+        ))}
+        {adminItems.length > 0 && !collapsed ? (
+          <Link
+            href="/settings"
+            onClick={onNavigate}
+            className="mt-1 flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Profil & akun ada di Pengaturan →
+          </Link>
         ) : null}
       </nav>
-      <div className="border-t border-border p-3">
+      <div className="border-t border-sidebar-border p-3">
         {collapsed ? (
           <button
             type="button"
@@ -283,7 +279,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <main className="aurora flex min-h-screen items-center justify-center px-4">
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="flex w-full max-w-md flex-col gap-3" aria-label="Memuat">
           <div className="skeleton h-8 w-48" />
           <div className="skeleton h-24 w-full" />
@@ -297,7 +293,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const title = TITLES[pathname] ?? TITLES[base] ?? 'Pansa';
 
   return (
-    <div className="min-h-screen text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <CommandPalette
         isAdmin={user?.role === 'admin'}
         onCreateSession={() => router.push('/sessions')}
@@ -305,7 +301,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       {/* Sidebar desktop */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 hidden border-r border-border bg-card transition-[width] duration-200 md:block',
+          'fixed inset-y-0 left-0 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:block',
           collapsed ? 'w-16' : 'w-60',
         )}
       >
@@ -345,7 +341,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-              className="glass absolute inset-y-0 left-0 w-64 border-r border-border"
+              className="absolute inset-y-0 left-0 w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
             >
               <button
                 type="button"
@@ -370,8 +366,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
       {/* Konten */}
       <div className={cn('pb-20 md:pb-0', collapsed ? 'md:pl-16' : 'md:pl-60')}>
-        <header className="glass sticky top-0 z-30 border-b border-border">
-          <div className="mx-auto flex min-h-14 w-full max-w-7xl items-center gap-2 px-4 py-2 md:px-6">
+        <header className="sticky top-0 z-30 border-b border-border bg-card">
+          <div className="flex h-16 w-full items-center gap-2 px-4 lg:px-6">
             <button
               type="button"
               aria-label="Buka menu"
@@ -380,21 +376,22 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             >
               <Menu size={20} />
             </button>
-            <h1 className="font-display text-lg font-semibold">{title}</h1>
-            <div className="flex-1" />
-            <button
-              type="button"
-              aria-label="Pencarian cepat (Ctrl K)"
-              title="Pencarian cepat (Ctrl+K)"
-              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
-              className="pressable hidden min-h-10 items-center gap-2 rounded-control border border-border bg-card px-3 text-[13px] text-muted-foreground hover:text-foreground sm:flex"
-            >
-              <Search size={15} />
-              <span>Cari…</span>
-              <kbd className="rounded border border-border bg-muted px-1.5 font-mono text-[11px]">
-                Ctrl K
-              </kbd>
-            </button>
+            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            <div className="flex min-w-0 flex-1 justify-center sm:justify-start">
+              <button
+                type="button"
+                aria-label="Pencarian cepat (Ctrl K)"
+                title="Pencarian cepat (Ctrl+K)"
+                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+                className="pressable flex h-9 w-full max-w-md items-center gap-2 rounded-control border border-input bg-background px-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Search size={15} />
+                <span className="flex-1 text-left">Cari…</span>
+                <kbd className="hidden rounded border border-border bg-muted px-1.5 font-mono text-[11px] sm:inline-flex">
+                  Ctrl K
+                </kbd>
+              </button>
+            </div>
             <ThemeIconButton />
             <div className="relative">
               <button
@@ -438,8 +435,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6">
-          <div key={pathname} className="page-enter">
+        <main className="p-4 md:p-6">
+          <div key={pathname} className="page-enter mx-auto w-full max-w-7xl">
             {children}
           </div>
         </main>
@@ -448,7 +445,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       {/* Bottom bar mobile */}
       <nav
         aria-label="Navigasi cepat"
-        className="glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-card md:hidden"
       >
         {[
           { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },

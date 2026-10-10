@@ -311,7 +311,7 @@ export default function MessagesPage() {
 
       <Dialog.Root open={detail !== null} onOpenChange={(o) => { if (!o) setDetail(null); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="glass fixed inset-0 z-40 bg-black/55" />
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
           <Dialog.Content
             aria-label="Detail pesan"
             className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-card p-4 shadow-3"
