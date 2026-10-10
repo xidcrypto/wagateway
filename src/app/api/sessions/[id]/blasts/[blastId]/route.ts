@@ -42,6 +42,8 @@ export const GET = withAuth(async (_req: NextRequest, ctx, routeCtx?: BlastCtx) 
         sessionId: true,
         label: true,
         textBody: true,
+        mediaJson: true,
+        buttonsJson: true,
         total: true,
         delayMin: true,
         delayMax: true,

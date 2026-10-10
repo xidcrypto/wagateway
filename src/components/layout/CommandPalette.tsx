@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
+  BookOpenText,
   BookUser,
   Gauge,
   Globe,
@@ -31,6 +32,7 @@ const PAGES = [
   { href: '/groups', label: 'Grup', icon: Users },
   { href: '/contacts', label: 'Kontak', icon: BookUser },
   { href: '/blast', label: 'Blast', icon: Megaphone },
+  { href: '/docs', label: 'API Docs', icon: BookOpenText },
   { href: '/admin', label: 'Dashboard admin', icon: Gauge, adminOnly: true },
   { href: '/admin/users', label: 'Pengguna (admin)', icon: Users, adminOnly: true },
   { href: '/admin/sessions', label: 'Semua session (admin)', icon: Smartphone, adminOnly: true },

@@ -30,8 +30,11 @@ import {
   getBlastDetail,
   listBlasts,
   listSessions,
+  type BlastButtonsInput,
   type BlastDetail,
   type BlastItem,
+  type BlastMediaInput,
+  type SendButton,
   type SessionItem,
 } from '@/lib/client/api';
 
@@ -113,6 +116,24 @@ function formatDateTime(iso: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function compositionSummary(d: BlastDetail): string {
+  const parts: string[] = [];
+  const m = d.mediaJson as BlastMediaInput | null;
+  const b = d.buttonsJson as BlastButtonsInput | null;
+  if (m) parts.push(`media ${m.kind}`);
+  if (b) {
+    parts.push(
+      b.mode === 'buttons'
+        ? `${b.buttons.length} tombol`
+        : b.mode === 'buttonv2'
+          ? `${b.buttons.length} balas cepat`
+          : 'list',
+    );
+  }
+  if (parts.length === 0) return 'teks saja';
+  return parts.join(' + ');
 }
 
 function BlastDetailView({
@@ -288,15 +309,17 @@ function BlastDetailView({
             </div>
             {detail.status === 'running' ? (
               <p className="tnum mt-2 text-[13px] text-muted-foreground">
-                Estimasi sisa: {formatEta(stats.pending, avgDelay)} ({stats.pending} pending × ±{avgDelay} ms)
+                Estimasi sisa: {formatEta(stats.pending, avgDelay)} ({stats.pending} pending × jeda ±{avgDelay} ms antar nomor)
               </p>
             ) : null}
           </Card>
 
           <Card title="Pesan">
-            <p className="whitespace-pre-wrap text-sm leading-6">{detail.textBody}</p>
+            <p className="whitespace-pre-wrap text-sm leading-6">
+              {detail.textBody || <span className="text-muted-foreground">(tanpa teks — media/tombol saja)</span>}
+            </p>
             <p className="tnum mt-2 text-xs text-muted-foreground">
-              Delay {detail.delayMin}–{detail.delayMax} ms per pesan
+              Komposisi: {compositionSummary(detail)} · Jeda {detail.delayMin}–{detail.delayMax} ms antar nomor
               {detail.error ? ` · Galat: ${detail.error}` : ''}
             </p>
           </Card>
@@ -365,9 +388,17 @@ export default function BlastPage() {
   const [label, setLabel] = useState('');
   const [text, setText] = useState('');
   const [recipients, setRecipients] = useState('');
-  const [delayMin, setDelayMin] = useState('1000');
-  const [delayMax, setDelayMax] = useState('3000');
+  const [delayMin, setDelayMin] = useState('3000');
+  const [delayMax, setDelayMax] = useState('5000');
   const [creating, setCreating] = useState(false);
+  // Komposisi opsional: media + tombol.
+  const [useMedia, setUseMedia] = useState(false);
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'audio' | 'document' | 'sticker'>('image');
+  const [mediaSrc, setMediaSrc] = useState('');
+  const [useButtons, setUseButtons] = useState(false);
+  const [buttonsMode, setButtonsMode] = useState<'buttons' | 'buttonv2' | 'list'>('buttons');
+  const [buttonsRaw, setButtonsRaw] = useState('');
+  const [listRaw, setListRaw] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -442,10 +473,7 @@ export default function BlastPage() {
       toast('error', 'Isi label campaign dulu.');
       return false;
     }
-    if (!text.trim()) {
-      toast('error', 'Isi teks pesan dulu. Dukung {{nama}} dari vars.');
-      return false;
-    }
+    // Teks boleh kosong bila ada media/tombol (validasi akhir saat buat).
     return true;
   }
 
@@ -457,32 +485,99 @@ export default function BlastPage() {
     return true;
   }
 
+  function parseBlastButtons(): BlastButtonsInput | null {
+    if (!useButtons) return null;
+    if (buttonsMode === 'list') {
+      const sections: BlastButtonsInput extends never ? never : Array<{ title?: string; rows: Array<{ title: string }> }> = [];
+      for (const line of listRaw.split('\n')) {
+        const t = line.trim();
+        if (!t) continue;
+        const [titlePart, ...rest] = t.split('|');
+        const rows = rest
+          .join('|')
+          .split(';')
+          .map((r) => r.trim())
+          .filter(Boolean)
+          .map((title) => ({ title }));
+        if (rows.length === 0) throw new Error(`Baris "${t}" tidak punya baris (pakai pemisah ";" ).`);
+        sections.push({ title: (titlePart ?? '').trim(), rows });
+      }
+      if (sections.length === 0) throw new Error('Isi minimal 1 section untuk list.');
+      return { mode: 'list', sections };
+    }
+    let arr: unknown;
+    try {
+      arr = JSON.parse(buttonsRaw.trim() || '[]');
+    } catch {
+      throw new Error('JSON tombol tidak valid.');
+    }
+    if (!Array.isArray(arr) || arr.length === 0) throw new Error('Isi minimal 1 tombol (JSON array).');
+    if (buttonsMode === 'buttonv2') {
+      if (arr.length > 3) throw new Error('Balas cepat maksimal 3 tombol.');
+      const btns = (arr as Array<{ id?: unknown; text?: unknown }>).map((b) => {
+        if (typeof b?.id !== 'string' || !b.id.trim()) throw new Error('Tiap tombol butuh id.');
+        if (typeof b?.text !== 'string' || !b.text.trim()) throw new Error('Tiap tombol butuh text.');
+        return { id: b.id.trim(), text: b.text.trim() };
+      });
+      return { mode: 'buttonv2', buttons: btns };
+    }
+    if (arr.length > 10) throw new Error('Maksimal 10 tombol.');
+    const btns = (arr as SendButton[]).map((b) => {
+      if (typeof b?.text !== 'string' || !b.text.trim()) throw new Error('Tiap tombol butuh text.');
+      return b;
+    });
+    return { mode: 'buttons', buttons: btns };
+  }
+
+  function buildMedia(): BlastMediaInput | null {
+    if (!useMedia) return null;
+    if (!mediaSrc.trim()) throw new Error('Isi sumber media (URL / data URI / path lokal).');
+    return { kind: mediaKind, media: mediaSrc.trim() };
+  }
+
   async function handleCreate(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!canNextFromPesan() || !canNextFromPenerima()) {
-      setStep(!label.trim() || !text.trim() ? 'pesan' : 'penerima');
+      setStep(!label.trim() ? 'pesan' : 'penerima');
       return;
     }
     const min = Number(delayMin);
     const max = Number(delayMax);
     if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 0) {
-      toast('error', 'Delay harus bilangan bulat ≥ 0 (ms).');
+      toast('error', 'Jeda harus bilangan bulat ≥ 0 (ms).');
       setStep('pengaturan');
       return;
     }
     if (max < min) {
-      toast('error', 'Delay max harus ≥ delay min.');
+      toast('error', 'Jeda max harus ≥ jeda min.');
       setStep('pengaturan');
+      return;
+    }
+    let media: BlastMediaInput | null = null;
+    let buttons: BlastButtonsInput | null = null;
+    try {
+      media = buildMedia();
+      buttons = parseBlastButtons();
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Komposisi tidak valid.');
+      setStep('pesan');
+      return;
+    }
+    if (!text.trim() && !media && !buttons) {
+      toast('error', 'Pesan kosong: isi teks, media, atau tombol (minimal satu).');
+      setStep('pesan');
       return;
     }
     setCreating(true);
     try {
       const r = await createBlast(sessionId, {
         label: label.trim(),
-        text: text.trim(),
+        text: text.trim() || undefined,
         recipients: recipients.trim(),
         delayMin: min,
         delayMax: max,
+        media,
+        buttons,
       });
       toast(
         'success',
@@ -493,8 +588,13 @@ export default function BlastPage() {
       setLabel('');
       setText('');
       setRecipients('');
-      setDelayMin('1000');
-      setDelayMax('3000');
+      setDelayMin('3000');
+      setDelayMax('5000');
+      setUseMedia(false);
+      setMediaSrc('');
+      setUseButtons(false);
+      setButtonsRaw('');
+      setListRaw('');
       setStep('pesan');
       setShowCreate(false);
       await loadBlasts(sessionId);
@@ -528,7 +628,7 @@ export default function BlastPage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Blast</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Broadcast massal satu per satu dengan jeda acak.
+            Broadcast massal satu per satu dengan jeda antar nomor.
           </p>
         </div>
         <Button onClick={() => { setStep('pesan'); setShowCreate(true); }} disabled={!sessionId}>
@@ -578,7 +678,7 @@ export default function BlastPage() {
       ) : blasts.length === 0 ? (
         <EmptyState
           title="Belum ada campaign blast"
-          hint="Buat campaign pertamamu: tulis pesan dengan variabel {{nama}}, tempel daftar nomor, atur jeda, lalu jalankan."
+          hint="Buat campaign pertamamu: tulis pesan dengan variabel {{nama}} (opsional bila ada media/tombol), tempel daftar nomor, atur jeda antar nomor, lalu jalankan."
           action={
             <Button disabled={!sessionId} onClick={() => { setStep('pesan'); setShowCreate(true); }}>
               <Plus size={15} /> Buat campaign
@@ -603,7 +703,7 @@ export default function BlastPage() {
                       <StatusBadge status={b.status} />
                     </span>
                     <span className="tnum mt-0.5 block text-xs text-muted-foreground">
-                      #{b.id} · {b.total} penerima · jeda {b.delayMin}–{b.delayMax} ms · {formatDateTime(b.createdAt)}
+                      #{b.id} · {b.total} penerima · jeda {b.delayMin}–{b.delayMax} ms antar nomor · {formatDateTime(b.createdAt)}
                     </span>
                   </span>
                 </span>
@@ -635,11 +735,10 @@ export default function BlastPage() {
                   placeholder="Promo Oktober"
                 />
                 <TextArea
-                  label="Teks pesan (dukung variabel {{nama}})"
+                  label="Teks pesan (dukung variabel {{nama}} — boleh kosong bila ada media/tombol)"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={4}
-                  required
                   placeholder={'Halo {{nama}}, ada promo spesial buat kamu!'}
                 />
                 {vars.length > 0 ? (
@@ -651,9 +750,80 @@ export default function BlastPage() {
                 <div className="rounded-card border border-border bg-background p-3">
                   <p className="text-xs font-medium text-muted-foreground">Pratinjau langsung</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
-                    {text.trim() ? previewTemplate(text) : '(ketik pesan untuk melihat pratinjau)'}
+                    {text.trim() ? previewTemplate(text) : '(tanpa teks — hanya media/tombol bila diisi di bawah)'}
                   </p>
                 </div>
+                <label className="flex min-h-10 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={useMedia}
+                    onChange={(e) => setUseMedia(e.target.checked)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  Sertakan media (gambar/video/audio/dokumen/stiker)
+                </label>
+                {useMedia ? (
+                  <div className="flex flex-col gap-3 rounded-card border border-border bg-background p-3">
+                    <Select
+                      label="Jenis media"
+                      value={mediaKind}
+                      onChange={(e) => setMediaKind(e.target.value as typeof mediaKind)}
+                    >
+                      <option value="image">Gambar (+caption dari teks)</option>
+                      <option value="video">Video (+caption dari teks)</option>
+                      <option value="audio">Audio / voice note</option>
+                      <option value="document">Dokumen (+caption dari teks)</option>
+                      <option value="sticker">Stiker (webp, tanpa teks)</option>
+                    </Select>
+                    <TextInput
+                      label="Sumber media (URL https, data URI, atau path lokal di server)"
+                      value={mediaSrc}
+                      onChange={(e) => setMediaSrc(e.target.value)}
+                      placeholder="https://… / data:… / /path/lokal"
+                    />
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Variabel {`{{nama}}`} juga bisa dipakai di caption (diambil dari teks di atas).
+                      Media yang digabung tombol hanya mendukung gambar + mode “Tombol”.
+                    </p>
+                  </div>
+                ) : null}
+                <label className="flex min-h-10 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={useButtons}
+                    onChange={(e) => setUseButtons(e.target.checked)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  Sertakan tombol interaktif
+                </label>
+                {useButtons ? (
+                  <div className="flex flex-col gap-3 rounded-card border border-border bg-background p-3">
+                    <Select
+                      label="Mode tombol"
+                      value={buttonsMode}
+                      onChange={(e) => setButtonsMode(e.target.value as typeof buttonsMode)}
+                    >
+                      <option value="buttons">Tombol (reply/url/copy/call, maks 10)</option>
+                      <option value="buttonv2">Balas cepat (reply saja, maks 3)</option>
+                      <option value="list">List (sections + rows)</option>
+                    </Select>
+                    {buttonsMode === 'list' ? (
+                      <TextArea
+                        label="Section (satu section per baris: Judul | baris 1 ; baris 2)"
+                        value={listRaw}
+                        onChange={(e) => setListRaw(e.target.value)}
+                        placeholder={'Menu | Nasi goreng ; Mie goreng'}
+                      />
+                    ) : (
+                      <TextArea
+                        label={buttonsMode === 'buttonv2' ? 'Tombol (JSON: [{"id":"…","text":"…"}])' : 'Tombol (JSON array, tiap item: text + id/url/copy/call)'}
+                        value={buttonsRaw}
+                        onChange={(e) => setButtonsRaw(e.target.value)}
+                        placeholder={buttonsMode === 'buttonv2' ? '[{"id":"ya","text":"Ya"}]' : '[{"type":"reply","id":"beli","text":"Beli"}]'}
+                      />
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex justify-end">
                   <Button type="button" onClick={() => { if (canNextFromPesan()) setStep('penerima'); }}>
                     Lanjut <ArrowRight size={15} />
@@ -724,13 +894,18 @@ export default function BlastPage() {
                   </div>
                 </div>
                 <p className="tnum text-xs leading-5 text-muted-foreground">
-                  Jeda acak per pesan antara min–max, minimum efektif 500 ms di worker.
+                  Jeda acak antar nomor (diukur dari mulai kirim ke nomor sebelumnya),
+                  minimum efektif 500 ms di worker. Nomor pertama langsung dikirim tanpa jeda.
                   Estimasi durasi untuk {summary.valid} penerima: {formatEta(summary.valid, Math.round(((Number(delayMin) || 0) + (Number(delayMax) || 0)) / 2))}.
                   Campaign langsung berjalan setelah dibuat.
                 </p>
                 <div className="rounded-card border border-border bg-background p-3 text-sm">
                   <p className="font-medium">{label.trim() || '(tanpa label)'} · {summary.valid} penerima</p>
-                  <p className="mt-1 line-clamp-2 text-muted-foreground">{text.trim() || '(tanpa teks)'}</p>
+                  <p className="mt-1 line-clamp-2 text-muted-foreground">
+                    {text.trim() || '(tanpa teks)'}
+                    {useMedia ? ` · media ${mediaKind}` : ''}
+                    {useButtons ? ` · ${buttonsMode}` : ''}
+                  </p>
                 </div>
                 <div className="flex justify-between">
                   <Button type="button" variant="secondary" onClick={() => setStep('penerima')}>

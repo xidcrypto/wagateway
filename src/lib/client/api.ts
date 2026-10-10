@@ -831,9 +831,31 @@ export type BlastItem = {
   finishedAt: string | null;
 };
 
+export type BlastMediaInput = {
+  kind: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  media: string;
+  mimetype?: string;
+  filename?: string;
+  gif?: boolean;
+  ptt?: boolean;
+};
+
+export type BlastButtonsInput =
+  | { mode: 'buttons'; buttons: SendButton[]; footer?: string; headerMedia?: string }
+  | { mode: 'buttonv2'; buttons: Array<{ id: string; text: string }>; footer?: string; headerMedia?: string }
+  | {
+      mode: 'list';
+      sections: SendListSection[];
+      title?: string;
+      buttonText?: string;
+      footer?: string;
+    };
+
 export type BlastDetail = BlastItem & {
   sessionId: string;
   textBody: string;
+  mediaJson: BlastMediaInput | null;
+  buttonsJson: BlastButtonsInput | null;
   error: string | null;
 };
 
@@ -850,13 +872,32 @@ export function getBlastDetail(
   return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts/${blastId}`);
 }
 
+export type CreateBlastBody = {
+  label: string;
+  text?: string;
+  recipients: string;
+  delayMin: number;
+  delayMax: number;
+  media?: BlastMediaInput | null;
+  buttons?: BlastButtonsInput | null;
+};
+
 export function createBlast(
   sessionId: string,
-  body: { label: string; text: string; recipients: string; delayMin: number; delayMax: number },
+  body: CreateBlastBody,
 ): Promise<{ blast: BlastItem; skipped: number }> {
+  const payload: Record<string, unknown> = {
+    label: body.label,
+    recipients: body.recipients,
+    delayMin: body.delayMin,
+    delayMax: body.delayMax,
+  };
+  if (body.text !== undefined) payload.text = body.text;
+  if (body.media) payload.mediaJson = body.media;
+  if (body.buttons) payload.buttonsJson = body.buttons;
   return api(`/api/sessions/${encodeURIComponent(sessionId)}/blasts`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -997,6 +1038,7 @@ export type MeUser = {
   role: 'admin' | 'user';
   active: boolean;
   webhookUrl: string | null;
+  hasApiKey: boolean;
 };
 
 export function patchMe(
@@ -1025,4 +1067,24 @@ export function updateWebhook(
     method: 'PUT',
     body: JSON.stringify(body),
   });
+}
+
+/** Status API key milik sendiri (tanpa nilai mentah). */
+export function getMyApiKey(): Promise<{ hasApiKey: boolean; hint: string | null }> {
+  return api('/api/me/api-key');
+}
+
+/** Buat API key baru (409 bila sudah ada — pakai rotateMyApiKey). */
+export function createMyApiKey(): Promise<{ apiKey: string; rotated: boolean }> {
+  return api('/api/me/api-key', { method: 'POST' });
+}
+
+/** Rotasi API key (key lama langsung mati, dapat key baru). */
+export function rotateMyApiKey(): Promise<{ apiKey: string; rotated: boolean }> {
+  return api('/api/me/api-key', { method: 'PUT' });
+}
+
+/** Hapus API key milik sendiri. */
+export function deleteMyApiKey(): Promise<{ deleted: boolean }> {
+  return api('/api/me/api-key', { method: 'DELETE' });
 }

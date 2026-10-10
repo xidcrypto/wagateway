@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTheme } from 'next-themes';
-import { Check, Copy, Dices, Eye, EyeOff, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Check, Copy, Dices, Eye, EyeOff, Image as ImageIcon, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { TextInput } from '@/components/ui/Fields';
@@ -11,11 +11,16 @@ import { Avatar } from '@/components/ui/Avatar';
 import { ErrorState, Skeleton } from '@/components/ui/States';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { toast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/Modal';
 import {
   ApiError,
   changePassword,
+  createMyApiKey,
+  deleteMyApiKey,
   getMe,
+  getMyApiKey,
   patchMe,
+  rotateMyApiKey,
   updateWebhook,
   type MeUser,
 } from '@/lib/client/api';
@@ -26,6 +31,7 @@ function errMsg(err: unknown, fallback: string): string {
 
 const SETTINGS_TABS = [
   { value: 'profil', label: 'Profil' },
+  { value: 'apikey', label: 'API Key' },
   { value: 'webhook', label: 'Webhook' },
   { value: 'keamanan', label: 'Keamanan' },
   { value: 'tampilan', label: 'Tampilan' },
@@ -101,6 +107,11 @@ export default function SettingsPage() {
   const [hasSecret, setHasSecret] = useState(false);
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [apiHint, setApiHint] = useState<string | null>(null);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [apiBusy, setApiBusy] = useState(false);
+  const [showDeleteKey, setShowDeleteKey] = useState(false);
   const { theme } = useTheme();
   const [reduceMotion, setReduceMotion] = useState(() => {
     try {
@@ -156,6 +167,7 @@ export default function SettingsPage() {
         setPhone(u.phone ?? '');
         setAvatarUrl(u.avatarUrl ?? '');
         setWebhookUrl(u.webhookUrl ?? '');
+        setHasApiKey(Boolean((u as { hasApiKey?: boolean }).hasApiKey));
         setLoading(false);
       })
       .catch((e) => {
@@ -163,6 +175,13 @@ export default function SettingsPage() {
         setError(errMsg(e, 'Gagal memuat profil.'));
         setLoading(false);
       });
+    getMyApiKey()
+      .then((r) => {
+        if (cancelled) return;
+        setHasApiKey(r.hasApiKey);
+        setApiHint(r.hint);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -236,6 +255,52 @@ export default function SettingsPage() {
       toast('error', errMsg(err, 'Gagal menyimpan webhook.'));
     } finally {
       setSavingWebhook(false);
+    }
+  }
+
+  async function handleCreateKey(): Promise<void> {
+    setApiBusy(true);
+    try {
+      const r = await createMyApiKey();
+      setNewApiKey(r.apiKey);
+      setHasApiKey(true);
+      setApiHint(`••••${r.apiKey.slice(-4)}`);
+      toast('success', 'API key dibuat. Salin sekarang — tidak ditampilkan lagi.');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal membuat API key.'));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function handleRotateKey(): Promise<void> {
+    setApiBusy(true);
+    try {
+      const r = await rotateMyApiKey();
+      setNewApiKey(r.apiKey);
+      setHasApiKey(true);
+      setApiHint(`••••${r.apiKey.slice(-4)}`);
+      toast('success', 'API key dirotasi. Key lama langsung mati — salin yang baru.');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal merotasi API key.'));
+    } finally {
+      setApiBusy(false);
+    }
+  }
+
+  async function handleDeleteKey(): Promise<void> {
+    setApiBusy(true);
+    try {
+      await deleteMyApiKey();
+      setNewApiKey(null);
+      setHasApiKey(false);
+      setApiHint(null);
+      setShowDeleteKey(false);
+      toast('success', 'API key dihapus.');
+    } catch (err) {
+      toast('error', errMsg(err, 'Gagal menghapus API key.'));
+    } finally {
+      setApiBusy(false);
     }
   }
 
@@ -336,6 +401,84 @@ export default function SettingsPage() {
             </div>
           </form>
         </Card>
+      ) : null}
+
+      {tab === 'apikey' ? (
+        <Card title="API Key pribadi">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Untuk integrasi sistem luar via header <code className="font-mono">x-api-key</code>.
+            Key tampil penuh <b>hanya sekali</b> saat dibuat/dirotasi — salin dan simpan baik-baik.
+            Rotasi mematikan key lama seketika.
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <KeyRound size={16} className="text-muted-foreground" />
+            {hasApiKey ? (
+              <span>
+                Status: <b>aktif</b>
+                {apiHint ? <span className="tnum font-mono text-muted-foreground"> ({apiHint})</span> : null}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Belum punya API key.</span>
+            )}
+          </div>
+          {newApiKey ? (
+            <div className="mt-3 rounded-control border border-status-open/40 bg-status-open/10 p-3">
+              <p className="text-xs font-medium text-muted-foreground">API key barumu (salin sekarang):</p>
+              <p className="tnum mt-1 break-all font-mono text-sm font-semibold">{newApiKey}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+                onClick={() => void copyText(newApiKey, 'API key')}
+              >
+                <Copy size={14} /> Salin key
+              </Button>
+            </div>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {!hasApiKey ? (
+              <Button type="button" disabled={apiBusy} onClick={() => void handleCreateKey()}>
+                <KeyRound size={15} /> {apiBusy ? 'Memproses…' : 'Buat API key'}
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="secondary" disabled={apiBusy} onClick={() => void handleRotateKey()}>
+                  <RefreshCw size={15} /> {apiBusy ? 'Memproses…' : 'Rotasi (ganti baru)'}
+                </Button>
+                <Button type="button" variant="danger" onClick={() => setShowDeleteKey(true)}>
+                  <Trash2 size={15} /> Hapus
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="mt-3 rounded-card border border-border bg-background p-3 text-[13px] leading-6">
+            <p className="font-medium">Contoh pakai (curl):</p>
+            <pre className="tnum mt-1 overflow-x-auto font-mono text-xs text-muted-foreground">
+{`curl -H "x-api-key: pn-..." \\
+  https://HOST/api/sessions`}
+            </pre>
+            <p className="mt-2 text-muted-foreground">
+              Lihat daftar endpoint lengkap di halaman <b>API Docs</b> (menu navigasi).
+            </p>
+          </div>
+        </Card>
+      ) : null}
+
+      {showDeleteKey ? (
+        <ConfirmDialog
+          title="Hapus API key?"
+          message={
+            <span>
+              Hapus API key milik <b>{me?.username}</b>? Integrasi yang memakai key lama langsung
+              berhenti. Tindakan ini tidak bisa dibatalkan.
+            </span>
+          }
+          confirmLabel="Ya, hapus"
+          busy={apiBusy}
+          onCancel={() => setShowDeleteKey(false)}
+          onConfirm={() => void handleDeleteKey()}
+        />
       ) : null}
 
       {tab === 'webhook' ? (

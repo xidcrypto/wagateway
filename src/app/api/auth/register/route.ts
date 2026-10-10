@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { createToken, toPublicUser } from '@/lib/server/auth';
+import { createToken, generateUserApiKey, toPublicUser } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
 import { isRegistrationEnabled } from '@/lib/server/settings';
@@ -42,6 +42,7 @@ async function handleRegister(req: NextRequest): Promise<Response> {
 
   const passwordHash = await bcrypt.hash(body.password, 10);
   try {
+    const apiKey = generateUserApiKey();
     const created = await prisma.user.create({
       data: {
         username: body.username.trim(),
@@ -49,13 +50,14 @@ async function handleRegister(req: NextRequest): Promise<Response> {
         fullName,
         passwordHash,
         phone: body.phone === null || body.phone === '' ? null : body.phone?.trim() ?? null,
+        apiKey,
         // Pendaftar publik selalu role user dan aktif.
         role: 'user',
         active: true,
       },
     });
     const token = createToken(created.id);
-    return ok({ token, user: toPublicUser(created) }, 201);
+    return ok({ token, user: toPublicUser(created), apiKey }, 201);
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002') {
       return fail('Username atau email sudah dipakai.', 409);

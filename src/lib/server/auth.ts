@@ -61,6 +61,33 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/** API key per user: format `pn-` + 32 char hex (dibuat saat register). */
+export function generateUserApiKey(): string {
+  return `pn-${crypto.randomBytes(16).toString('hex')}`;
+}
+
+async function loadUserByApiKey(raw: string): Promise<AuthUser | null> {
+  if (!raw.startsWith('pn-')) return null;
+  // Cari kandidat lalu bandingkan timing-safe (kolom unik, tetap aman).
+  const user = await prisma.user.findUnique({ where: { apiKey: raw } });
+  if (!user || !user.active || !user.apiKey) return null;
+  if (!timingSafeEqualStr(raw, user.apiKey)) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    active: user.active,
+  };
+}
+
 async function loadUserById(id: number): Promise<AuthUser | null> {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user || !user.active) return null;
@@ -73,12 +100,16 @@ async function loadUserById(id: number): Promise<AuthUser | null> {
   };
 }
 
-/** Ambil identitas dari Bearer JWT atau x-api-key (timingSafeEqual). */
+/** Ambil identitas dari Bearer JWT, x-api-key master, atau x-api-key per user (`pn-…`). */
 export async function authenticate(req: NextRequest): Promise<AuthContext | null> {
   const apiKey = req.headers.get('x-api-key');
   const masterKey = process.env.MASTER_API_KEY;
   if (apiKey && masterKey && timingSafeEqualHex(apiKey, masterKey)) {
     return { kind: 'apiKey', user: virtualAdmin() };
+  }
+  if (apiKey && apiKey.startsWith('pn-')) {
+    const user = await loadUserByApiKey(apiKey.trim());
+    if (user) return { kind: 'apiKey', user };
   }
 
   const authHeader = req.headers.get('authorization');
@@ -109,11 +140,12 @@ export type PublicUser = {
   role: 'admin' | 'user';
   active: boolean;
   webhookUrl: string | null;
+  hasApiKey: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
 
-/** User aman untuk respons API: tanpa passwordHash dan webhookSecret. */
+/** User aman untuk respons API: tanpa passwordHash, webhookSecret, dan apiKey mentah. */
 export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
@@ -125,6 +157,7 @@ export function toPublicUser(user: User): PublicUser {
     role: user.role,
     active: user.active,
     webhookUrl: user.webhookUrl,
+    hasApiKey: Boolean(user.apiKey),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

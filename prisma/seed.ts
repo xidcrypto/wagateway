@@ -1,6 +1,7 @@
 import 'dotenv/config';
 
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
 
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
         email,
         fullName,
         passwordHash,
+        apiKey: `pn-${crypto.randomBytes(16).toString('hex')}`,
         role: 'admin',
         active: true,
       },

@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   BookUser,
+  BookOpenText,
   ChevronLeft,
   Gauge,
   Globe,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { href: '/groups', label: 'Grup', icon: <Users size={19} /> },
   { href: '/contacts', label: 'Kontak', icon: <BookUser size={19} /> },
   { href: '/blast', label: 'Blast', icon: <Megaphone size={19} /> },
+  { href: '/docs', label: 'API Docs', icon: <BookOpenText size={19} /> },
   { href: '/settings', label: 'Pengaturan', icon: <Settings size={19} /> },
 ];
 
@@ -61,6 +63,7 @@ const TITLES: Record<string, string> = {
   '/groups': 'Grup',
   '/contacts': 'Kontak',
   '/blast': 'Blast',
+  '/docs': 'API Docs',
   '/admin': 'Dashboard admin',
   '/admin/users': 'Pengguna',
   '/admin/sessions': 'Semua session',
