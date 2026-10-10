@@ -13,7 +13,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const replySchema = z.object({
-  message: z.string().min(1, 'Pesan wajib diisi.').max(2000, 'Pesan maksimal 2000 karakter.'),
+  message: z.string().max(2000, 'Pesan maksimal 2000 karakter.').optional().default(''),
+  // ID file staged (dari POST /stage). Bila ada, pesan memakai file itu.
+  stagedId: z.number().int().positive().optional(),
 });
 
 function toDetail(t: {
@@ -87,7 +89,9 @@ async function handleReply(
   const parsed = await parseJsonBody(req, replySchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data.message.trim();
-  if (!body) return fail('Pesan wajib diisi.', 400);
+  const stagedId = parsed.data.stagedId ?? null;
+  // Teks boleh kosong BILA ada gambar staged (caption opsional).
+  if (!body && stagedId === null) return fail('Pesan wajib diisi.', 400);
   try {
     const ticket = await prisma.supportTicket.findFirst({
       where: { id, userId: ctx.user.id },
@@ -97,11 +101,32 @@ async function handleReply(
     if (String(ticket.status) === 'closed') {
       return fail('Tiket sudah ditutup. Buat tiket baru bila masih butuh bantuan.', 409);
     }
+    // Klaim staged file milik pengirim di tiket ini (sekali pakai).
+    let staged: { id: number; fileName: string; mime: string } | null = null;
+    if (stagedId !== null) {
+      staged = await prisma.supportStagedFile.findFirst({
+        where: { id: stagedId, ticketId: id, userId: ctx.user.id },
+        select: { id: true, fileName: true, mime: true },
+      });
+      if (!staged) {
+        return fail('File lampiran tidak ditemukan atau sudah dipakai. Unggah ulang.', 400);
+      }
+    }
     const created = await prisma.$transaction(async (tx) => {
       const msg = await tx.supportMessage.create({
-        data: { ticketId: id, senderId: ctx.user.id, fromAdmin: false, body },
+        data: {
+          ticketId: id,
+          senderId: ctx.user.id,
+          fromAdmin: false,
+          body,
+          mediaPath: staged ? staged.fileName : null,
+          mediaMime: staged ? staged.mime : null,
+        },
         include: { sender: { select: { id: true, username: true, fullName: true } } },
       });
+      if (staged) {
+        await tx.supportStagedFile.delete({ where: { id: staged.id } }).catch(() => {});
+      }
       await tx.supportTicket.update({
         where: { id },
         data: { status: 'open', userLastReadAt: new Date() },

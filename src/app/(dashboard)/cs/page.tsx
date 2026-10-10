@@ -27,7 +27,6 @@ import {
   listTickets,
   replyTicket,
   sendTicketTyping,
-  uploadTicketImage,
   type TicketDetail,
   type TicketListItem,
   type TicketMessage,
@@ -106,8 +105,6 @@ function CsContent() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
   const typingSentAt = useRef(0);
   const selectedRef = useRef<number | null>(null);
@@ -298,47 +295,25 @@ function CsContent() {
     }
   }
 
-  /** Kirim teks (dari composer). */
-  async function sendText(text: string): Promise<void> {
-    if (!detail || !text || sending) return;
+  /** Kirim balasan: teks + stagedId (gambar sudah di server sejak dipilih). */
+  async function sendReply(text: string, stagedId: number | null): Promise<void> {
+    if (!detail || sending) return;
+    if (!text && stagedId === null) return;
     setSending(true);
     try {
-      const r = await replyTicket(detail.id, text);
+      const r = await replyTicket(detail.id, text, stagedId ?? undefined);
       // Optimistic via respons (SSE ticket.message jadi dedup).
       setDetail((prev) => {
         if (!prev || prev.id !== detail.id) return prev;
         if (prev.messages.some((x) => x.id === r.message.id)) return prev;
         return { ...prev, messages: [...prev.messages, r.message] };
       });
-      toast('success', 'Balasan terkirim.');
+      handleTypingPing();
+      toast('success', stagedId !== null ? 'Gambar terkirim.' : 'Balasan terkirim.');
     } catch (err) {
       toast('error', err instanceof ApiError ? err.message : 'Gagal mengirim balasan.');
     } finally {
       setSending(false);
-    }
-  }
-
-  /** Kirim gambar + caption (dari composer, setelah pratinjau). */
-  async function sendImage(file: File, caption: string): Promise<void> {
-    if (!detail || detail.status === 'closed' || uploading) return;
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const r = await uploadTicketImage(detail.id, file, caption || undefined, (p) =>
-        setUploadProgress(p),
-      );
-      setDetail((prev) => {
-        if (!prev || prev.id !== detail.id) return prev;
-        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
-        return { ...prev, messages: [...prev.messages, r.message] };
-      });
-      handleTypingPing();
-      toast('success', 'Gambar terkirim.');
-    } catch (err) {
-      toast('error', err instanceof ApiError ? err.message : 'Gagal mengunggah gambar.');
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
     }
   }
 
@@ -505,14 +480,12 @@ function CsContent() {
                 </p>
               ) : (
                 <TicketComposer
-                  placeholder="Tulis balasan… (maks 2000 char, gambar ≤10 MB)"
+                  ticketId={detail.id}
+                  placeholder="Tulis balasan… (gambar langsung terunggah saat dipilih)"
                   sending={sending}
-                  uploading={uploading}
-                  progress={uploadProgress}
                   showClose
                   onCloseTicket={() => setConfirmClose(true)}
-                  onSendText={(text) => void sendText(text)}
-                  onSendImage={(file, caption) => void sendImage(file, caption)}
+                  onSend={(text, stagedId) => void sendReply(text, stagedId)}
                   onTypingPing={handleTypingPing}
                   onError={(msg) => toast('error', msg)}
                 />

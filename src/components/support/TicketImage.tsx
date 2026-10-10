@@ -11,8 +11,11 @@ import { cn } from '@/lib/client/cn';
  * <img src> mentah tidak bisa (browser tak kirim token → 401 → blank).
  * Komponen ini fetch pakai token → blob URL, dengan state loading / error
  * + tombol "Coba lagi". Klik thumbnail = lightbox ukuran penuh.
+ *
+ * Varian `compact`: thumbnail 44px tanpa lightbox, dipakai chip pratinjau
+ * staged di composer (URL staged juga berauth → tak boleh <img> mentah).
  */
-export function TicketImage({ url }: { url: string }) {
+export function TicketImage({ url, compact }: { url: string; compact?: boolean }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,11 @@ export function TicketImage({ url }: { url: string }) {
   if (loading) {
     return (
       <div
-        className="skeleton mb-1.5 h-36 w-56 max-w-full rounded-control"
+        className={
+          compact
+            ? 'skeleton h-11 w-11 shrink-0 rounded-control'
+            : 'skeleton mb-1.5 h-36 w-56 max-w-full rounded-control'
+        }
         role="status"
         aria-label="Memuat gambar…"
       />
@@ -68,6 +75,19 @@ export function TicketImage({ url }: { url: string }) {
   }
 
   if (error || !blobUrl) {
+    if (compact) {
+      return (
+        <button
+          type="button"
+          onClick={() => setSeq((s) => s + 1)}
+          title={error ?? 'Gambar tidak tersedia. Klik untuk coba lagi.'}
+          aria-label="Muat ulang pratinjau"
+          className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border bg-muted/50 text-muted-foreground hover:bg-muted"
+        >
+          <ImageOff size={16} aria-hidden />
+        </button>
+      );
+    }
     return (
       <div className="mb-1.5 flex max-w-full items-center gap-2 rounded-control border border-border bg-muted/50 px-3 py-2.5">
         <ImageOff size={16} className="shrink-0 text-muted-foreground" aria-hidden />
@@ -87,16 +107,24 @@ export function TicketImage({ url }: { url: string }) {
     <>
       <button
         type="button"
-        onClick={() => setLightbox(true)}
-        aria-label="Perbesar gambar"
+        onClick={() => {
+          if (!compact) setLightbox(true);
+        }}
+        aria-label={compact ? 'Pratinjau lampiran' : 'Perbesar gambar'}
         className={cn(
-          'pressable mb-1.5 block overflow-hidden rounded-control border border-border',
+          compact
+            ? 'pressable block h-11 w-11 shrink-0 cursor-default overflow-hidden rounded-control border border-border'
+            : 'pressable mb-1.5 block overflow-hidden rounded-control border border-border',
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={blobUrl} alt="Lampiran tiket" className="max-h-48 w-auto object-cover" />
+        <img
+          src={blobUrl}
+          alt="Lampiran tiket"
+          className={compact ? 'h-full w-full object-cover' : 'max-h-48 w-auto object-cover'}
+        />
       </button>
-      {lightbox ? (
+      {lightbox && !compact ? (
         <Modal title="Lampiran" onClose={() => setLightbox(false)} wide>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={blobUrl} alt="Lampiran tiket" className="max-h-[70vh] w-full rounded-control object-contain" />

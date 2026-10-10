@@ -69,6 +69,7 @@ model User {
   passwordResets PasswordReset[]
   notifications  Notification[]
   supportTickets SupportTicket[]
+  supportStaged  SupportStagedFile[]
   supportSent    SupportMessage[] @relation("SupportSender")
 
   @@map("users")
@@ -199,18 +200,40 @@ enum TicketStatus {
 model SupportTicket {
   id             Int          @id @default(autoincrement())
   userId         Int          @map("user_id")
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject        String       @db.VarChar(255)
-  status         TicketStatus @default(open)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String       @db.VarChar(255)
+  status    TicketStatus @default(open)
   userLastReadAt DateTime?   @map("user_last_read_at")
   adminLastReadAt DateTime?  @map("admin_last_read_at")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  messages       SupportMessage[]
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  messages  SupportMessage[]
+  staged    SupportStagedFile[]
 
   @@index([userId, status, updatedAt])
   @@index([status, updatedAt])
   @@map("support_tickets")
+}
+
+/**
+ * File gambar yang sudah diunggah ke server tapi BELUM dikirim sebagai
+ * pesan (pratinjau ala live-chat). Kedaluwarsa 1 jam bila tak dipakai;
+ * dibersihkan sweeper saat boot + tiap stage baru. Hapus user = cascade.
+ */
+model SupportStagedFile {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int      @map("ticket_id")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName  String   @map("file_name") @db.VarChar(128)
+  mime      String   @db.VarChar(64)
+  size      Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@index([createdAt])
+  @@map("support_staged_files")
 }
 
 model SupportMessage {

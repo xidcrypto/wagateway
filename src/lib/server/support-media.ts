@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { randomBytes } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { prisma } from '@/lib/server/prisma';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 /**
@@ -104,6 +105,37 @@ export function supportImagePath(name: string): string | null {
   // Kunci di dalam dir support (resolve + prefix, pola media-loader).
   if (!resolve(full).startsWith(`${supportDir()}/`)) return null;
   return full;
+}
+
+/** Hapus file fisik lampiran (tak melempar bila sudah hilang). */
+export async function deleteSupportImage(name: string): Promise<void> {
+  const full = supportImagePath(name);
+  if (!full) return;
+  try {
+    await unlink(full);
+  } catch {
+    // Sudah hilang / tak bisa dihapus; DB tetap sumber kebenaran.
+  }
+}
+
+/** Umur staged file sebelum dianggap kedaluwarsa (1 jam). */
+export const STAGED_FILE_TTL_MS = 60 * 60 * 1000;
+
+/** Hapus semua staged file yang kedaluwarsa di DB + disk. */
+export async function cleanExpiredStagedFiles(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - STAGED_FILE_TTL_MS);
+    const expired = await prisma.supportStagedFile.findMany({
+      where: { createdAt: { lt: cutoff } },
+      select: { id: true, fileName: true },
+    });
+    for (const e of expired) {
+      await deleteSupportImage(e.fileName);
+      await prisma.supportStagedFile.delete({ where: { id: e.id } }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error cleaning expired staged files:', err);
+  }
 }
 
 export function allowedImageMimes(): string[] {

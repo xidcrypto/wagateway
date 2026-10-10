@@ -1194,14 +1194,15 @@ export function getTicket(id: number): Promise<{ ticket: TicketDetail }> {
   return api(`/api/tickets/${id}`);
 }
 
-/** Balas tiket milik sendiri (409 bila sudah ditutup). */
+/** Balas tiket milik sendiri (409 bila sudah ditutup; stagedId opsional). */
 export function replyTicket(
   id: number,
   message: string,
+  stagedId?: number,
 ): Promise<{ replied: boolean; message: TicketMessage }> {
   return api(`/api/tickets/${id}`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, stagedId: stagedId ?? null }),
   });
 }
 
@@ -1222,6 +1223,90 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+/**
+ * TAHAP 1: unggah gambar LANGSUNG ke server saat dipilih (tanpa menunggu
+ * Kirim). Progress 0–100 + efek lazy. Mengembalikan staged + controller
+ * abort (untuk tombol X saat masih mengunggah).
+ */
+export type StagedImage = {
+  id: number;
+  previewUrl: string;
+  mime: string;
+  size: number;
+};
+
+export function stageTicketImage(
+  id: number,
+  file: File,
+  onProgress?: (percent: number) => void,
+): { promise: Promise<{ staged: StagedImage }>; abort: () => void } {
+  let xhr: XMLHttpRequest | null = null;
+  const promise = new Promise<{ staged: StagedImage }>((resolve, reject) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('image', file);
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/tickets/${id}/stage`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      try {
+        onProgress?.(Math.min(100, Math.round((e.loaded / e.total) * 100)));
+      } catch {
+        // Abaikan.
+      }
+    });
+    xhr.addEventListener('load', () => {
+      const status = xhr?.status ?? 0;
+      if (status === 401) {
+        redirectToLogin();
+        reject(new ApiError('Belum login. Silakan login dulu.', 401));
+        return;
+      }
+      let body: { success: boolean; data?: { staged: StagedImage }; error?: string };
+      try {
+        body = JSON.parse(xhr?.responseText ?? '') as typeof body;
+      } catch {
+        reject(new ApiError(`Respons server tidak valid (HTTP ${status}).`, status));
+        return;
+      }
+      if (!body.success || !body.data) {
+        // Pesan 413/400 server diteruskan apa adanya (jelas, bukan refresh).
+        reject(new ApiError(body.error || 'Gagal mengunggah gambar.', status));
+        return;
+      }
+      try {
+        onProgress?.(100);
+      } catch {
+        // Abaikan.
+      }
+      resolve(body.data);
+    });
+    xhr.addEventListener('error', () => {
+      reject(new ApiError('Tidak bisa menghubungi server. Periksa koneksi.', 0));
+    });
+    xhr.addEventListener('abort', () => {
+      reject(new ApiError('Unggahan dibatalkan.', 0));
+    });
+    xhr.send(form);
+  });
+  return {
+    promise,
+    abort: () => {
+      try {
+        xhr?.abort();
+      } catch {
+        // Abaikan.
+      }
+    },
+  };
+}
+
+/** Hapus file staged di server (tombol X di pratinjau). Idempoten. */
+export function deleteStagedImage(stagedId: number): Promise<{ deleted: boolean }> {
+  return api(`/api/tickets/staged/${stagedId}`, { method: 'DELETE' });
 }
 
 /**
@@ -1323,14 +1408,15 @@ export function getAdminTicket(id: number): Promise<{ ticket: AdminTicketDetail 
   return api(`/api/admin/tickets/${id}`);
 }
 
-/** Admin membalas tiket (otomatis answered; closed ikut terbuka). */
+/** Admin membalas tiket (otomatis answered; closed ikut terbuka; stagedId opsional). */
 export function replyAdminTicket(
   id: number,
   message: string,
+  stagedId?: number,
 ): Promise<{ replied: boolean; reopened: boolean; message: TicketMessage }> {
   return api(`/api/admin/tickets/${id}`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, stagedId: stagedId ?? null }),
   });
 }
 

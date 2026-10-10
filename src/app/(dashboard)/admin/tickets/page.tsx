@@ -25,7 +25,6 @@ import {
   replyAdminTicket,
   sendTicketTyping,
   setAdminTicketStatus,
-  uploadTicketImage,
   type AdminTicketDetail,
   type AdminTicketListItem,
   type TicketMessage,
@@ -76,8 +75,6 @@ function TicketsContent() {
   const [busyStatus, setBusyStatus] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const typingTimer = useRef<number | null>(null);
   const typingSentAt = useRef(0);
   const selectedRef = useRef<number | null>(null);
@@ -230,12 +227,13 @@ function TicketsContent() {
     router.push('/admin/tickets');
   }
 
-  /** Kirim teks ke user (dari composer). */
-  async function sendText(text: string): Promise<void> {
-    if (!detail || !text || sending) return;
+  /** Kirim balasan ke user: teks + stagedId (gambar sudah di server sejak dipilih). */
+  async function sendReply(text: string, stagedId: number | null): Promise<void> {
+    if (!detail || sending) return;
+    if (!text && stagedId === null) return;
     setSending(true);
     try {
-      const r = await replyAdminTicket(detail.id, text);
+      const r = await replyAdminTicket(detail.id, text, stagedId ?? undefined);
       // Optimistic via respons (SSE ticket.message jadi dedup).
       setDetail((prev) => {
         if (!prev || prev.id !== detail.id) return prev;
@@ -243,7 +241,14 @@ function TicketsContent() {
         return { ...prev, messages: [...prev.messages, r.message], status: 'answered' };
       });
       await loadList(0, false);
-      toast('success', r.reopened ? 'Tiket dibuka lagi dan balasan terkirim.' : 'Balasan terkirim ke user.');
+      toast(
+        'success',
+        stagedId !== null
+          ? 'Gambar terkirim ke user.'
+          : r.reopened
+            ? 'Tiket dibuka lagi dan balasan terkirim.'
+            : 'Balasan terkirim ke user.',
+      );
     } catch (err) {
       toast('error', errMsg(err, 'Gagal mengirim balasan.'));
     } finally {
@@ -258,31 +263,6 @@ function TicketsContent() {
     if (now - typingSentAt.current < 3000) return;
     typingSentAt.current = now;
     sendTicketTyping(selectedId).catch(() => {});
-  }
-
-  /** Kirim gambar + caption ke user (dari composer, setelah pratinjau). */
-  async function sendImage(file: File, caption: string): Promise<void> {
-    if (!detail || uploading) return;
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const r = await uploadTicketImage(detail.id, file, caption || undefined, (p) =>
-        setUploadProgress(p),
-      );
-      setDetail((prev) => {
-        if (!prev || prev.id !== detail.id) return prev;
-        if (prev.messages.some((x) => x.id === r.message.id)) return prev;
-        return { ...prev, messages: [...prev.messages, r.message], status: 'answered' };
-      });
-      handleTypingPing();
-      await loadList(0, false);
-      toast('success', 'Gambar terkirim ke user.');
-    } catch (err) {
-      toast('error', errMsg(err, 'Gagal mengunggah gambar.'));
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
   }
 
   async function handleStatus(next: 'open' | 'answered' | 'closed'): Promise<void> {
@@ -470,15 +450,13 @@ function TicketsContent() {
               </div>
             ) : null}
             <TicketComposer
-              placeholder="Tulis balasan ke user… (gambar ≤10 MB)"
+              ticketId={detail.id}
+              placeholder="Tulis balasan ke user… (gambar langsung terunggah saat dipilih)"
               sending={sending}
-              uploading={uploading}
-              progress={uploadProgress}
               sendLabel="Kirim balasan"
               showClose={detail.status !== 'closed'}
               onCloseTicket={() => setConfirmClose(true)}
-              onSendText={(text) => void sendText(text)}
-              onSendImage={(file, caption) => void sendImage(file, caption)}
+              onSend={(text, stagedId) => void sendReply(text, stagedId)}
               onTypingPing={handleTypingPing}
               onError={(msg) => toast('error', msg)}
             />

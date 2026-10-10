@@ -12,8 +12,9 @@ type RouteCtx = { params: Promise<{ name: string }> };
 
 /**
  * Sajikan lampiran gambar tiket. BERAUTH + cek kepemilikan: user biasa
- * hanya boleh melihat gambar di tiket miliknya (dilihat dari mediaPath
- * yang tercatat di DB); admin boleh semua. Bukan file publik statis.
+ * hanya boleh melihat gambar di tiket miliknya — baik yang sudah jadi
+ * pesan (supportMessage.mediaPath) MAUPUN yang masih staged/pratinjau
+ * (supportStagedFile.fileName); admin boleh semua. Bukan file publik statis.
  */
 export const GET = withAuth(async (req: NextRequest, ctx, routeCtx?: RouteCtx) => {
   const raw = (await routeCtx?.params)?.name;
@@ -21,12 +22,30 @@ export const GET = withAuth(async (req: NextRequest, ctx, routeCtx?: RouteCtx) =
   const full = supportImagePath(raw);
   if (!full) return fail('Nama file tidak valid.', 400);
   try {
+    // 1) File yang sudah jadi pesan.
     const owner = await prisma.supportMessage.findFirst({
       where: { mediaPath: raw },
-      select: { ticketId: true, ticket: { select: { userId: true } } },
+      select: { ticketId: true, ticket: { select: { userId: true } }, mediaMime: true },
     });
-    if (!owner) return fail('Gambar tidak ditemukan.', 404);
-    if (ctx.user.role !== 'admin' && owner.ticket.userId !== ctx.user.id) {
+    let mime: string | null = owner?.mediaMime ?? null;
+    let allowedUserId: number | null = owner ? owner.ticket.userId : null;
+    // 2) File staged (pratinjau chip composer, belum dikirim).
+    if (!owner) {
+      const staged = await prisma.supportStagedFile.findFirst({
+        where: { fileName: raw },
+        select: { userId: true, ticket: { select: { userId: true } }, mime: true },
+      });
+      if (!staged) return fail('Gambar tidak ditemukan.', 404);
+      mime = staged.mime;
+      // Pemilik staged = pengunggah; admin (id 0) stage atas nama seed id 1
+      // tapi tiketnya tetap milik user bersangkutan — izinkan keduanya.
+      allowedUserId = staged.ticket.userId;
+      const uploaderOk = staged.userId === ctx.user.id;
+      const ticketOwnerOk = staged.ticket.userId === ctx.user.id;
+      if (ctx.user.role !== 'admin' && !uploaderOk && !ticketOwnerOk) {
+        return fail('Akses ditolak. Bukan tiket milikmu.', 403);
+      }
+    } else if (ctx.user.role !== 'admin' && allowedUserId !== ctx.user.id) {
       return fail('Akses ditolak. Bukan tiket milikmu.', 403);
     }
     let bytes: Buffer;
@@ -35,15 +54,9 @@ export const GET = withAuth(async (req: NextRequest, ctx, routeCtx?: RouteCtx) =
     } catch {
       return fail('Gambar tidak ditemukan.', 404);
     }
-    // MIME dari magic bytes saat upload tersimpan di DB; fallback aman.
-    const row = await prisma.supportMessage.findFirst({
-      where: { mediaPath: raw },
-      select: { mediaMime: true },
-    });
-    const mime = row?.mediaMime ?? 'image/jpeg';
     const res = new NextResponse(new Uint8Array(bytes), {
       headers: {
-        'Content-Type': mime,
+        'Content-Type': mime ?? 'image/jpeg',
         'Content-Length': String(bytes.byteLength),
         'Cache-Control': 'private, max-age=86400',
       },
