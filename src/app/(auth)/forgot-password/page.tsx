@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
-import { motion } from 'motion/react';
-import { ApiError, forgotPassword, resetPassword } from '@/lib/client/api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ApiError, forgotPassword, getSiteInfo, resetPassword } from '@/lib/client/api';
 import { TextInput } from '@/components/ui/Fields';
 import { Button } from '@/components/ui/Button';
-import { ThemeIconButton } from '@/components/layout/ThemeToggle';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
+  const [siteName, setSiteName] = useState('Pansa Gateway');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +19,18 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSiteInfo()
+      .then((info) => {
+        if (!cancelled) setSiteName(info.siteName);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function fail(err: unknown): void {
     if (err instanceof ApiError) {
@@ -65,24 +77,23 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="absolute right-4 top-4">
-          <ThemeIconButton />
-        </div>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full rounded-card border border-border bg-card p-6 shadow-1"
-      >
-        <h1 className="font-display text-center text-2xl font-bold">Lupa Password</h1>
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          {step === 1
-            ? 'Masukkan email akun, kode reset 6 digit dikirim ke email'
-            : 'Masukkan kode 6 digit dari email + password baru'}
+    <AuthShell
+      siteName={siteName}
+      siteTagline="Reset password lewat kode 6 digit yang dikirim ke email."
+      title="Lupa Password"
+      subtitle={
+        step === 1
+          ? 'Masukkan email akun, kode reset 6 digit dikirim ke email'
+          : 'Masukkan kode 6 digit dari email + password baru'
+      }
+      footer={
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          <Link href="/login" className="font-medium text-foreground hover:underline">
+            Kembali ke login
+          </Link>
         </p>
-
+      }
+    >
         {step === 1 ? (
           <form onSubmit={handleRequestCode} className="mt-6 flex flex-col gap-4" noValidate>
             <TextInput
@@ -174,13 +185,6 @@ export default function ForgotPasswordPage() {
           </form>
         )}
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          <Link href="/login" className="font-medium text-foreground hover:underline">
-            Kembali ke login
-          </Link>
-        </p>
-      </motion.div>
-      </div>
-    </main>
+    </AuthShell>
   );
 }

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Smartphone, Wifi } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { Reveal } from '@/components/ui/Reveal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { StatusOrb } from '@/components/ui/StatusOrb';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
@@ -33,7 +34,7 @@ function StatCard({
 }) {
   const shown = useCountUp(value);
   return (
-    <div className="rounded-card border border-border bg-card p-4 shadow-1">
+    <div className="rounded-card border border-border bg-card p-4 shadow-1 transition hover:-translate-y-0.5 hover:shadow-2">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         <span
@@ -219,8 +220,10 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((c) => (
-          <StatCard key={c.label} {...c} />
+        {cards.map((c, i) => (
+          <Reveal key={c.label} delayMs={i * 60}>
+            <StatCard {...c} />
+          </Reveal>
         ))}
       </div>
 

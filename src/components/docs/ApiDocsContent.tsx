@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { BookOpenText, Check, Copy } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { useEffect, useMemo, useState } from 'react';
+import { BookOpenText, Check, Copy, ListTree } from 'lucide-react';
 import { TextInput } from '@/components/ui/Fields';
 import { toast } from '@/components/ui/Toast';
 import { cn } from '@/lib/client/cn';
@@ -617,74 +616,100 @@ function curlFor(host: string, e: DocEndpoint): string {
   return lines.join('\n');
 }
 
-function EndpointCard({
+function EndpointToggle({
   host,
   e,
   copied,
   onCopy,
+  defaultOpen = false,
 }: {
   host: string;
   e: DocEndpoint;
   copied: string | null;
   onCopy: (text: string, label: string) => void;
+  defaultOpen?: boolean;
 }) {
   const curl = curlFor(host, e);
   const curlKey = `curl ${e.method} ${e.path}`;
   return (
-    <li className="rounded-card border border-border bg-card p-3 shadow-1 sm:p-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <details
+      className="group rounded-control border border-transparent px-2 py-1 transition hover:border-border hover:bg-card"
+      open={defaultOpen || undefined}
+    >
+      <summary className="notion-toggle flex cursor-pointer list-none items-center gap-2.5 py-1.5">
+        <span
+          aria-hidden
+          className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90"
+        >
+          →
+        </span>
         <span
           className={cn(
-            'rounded-control px-2 py-0.5 font-mono text-xs font-bold',
+            'shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] font-bold',
             METHOD_CLASS[firstMethod(e.method)] ?? 'bg-muted text-muted-foreground',
           )}
         >
           {e.method}
         </span>
-        <code className="tnum min-w-0 flex-1 break-all font-mono text-[13px] font-semibold">
-          {e.path}
-        </code>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{e.title}</span>
+          <code className="tnum block truncate font-mono text-xs text-muted-foreground">
+            {e.path}
+          </code>
+        </span>
         <button
           type="button"
           aria-label={`Salin curl ${e.title}`}
-          onClick={() => onCopy(curl, curlKey)}
-          className="pressable inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={(ev) => {
+            ev.preventDefault();
+            onCopy(curl, curlKey);
+          }}
+          className="pressable inline-flex min-h-8 shrink-0 items-center gap-1 rounded-control border border-border px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
         >
-          {copied === curlKey ? <Check size={14} /> : <Copy size={14} />}
-          {copied === curlKey ? 'Tersalin' : 'Salin curl'}
+          {copied === curlKey ? <Check size={13} /> : <Copy size={13} />}
+          {copied === curlKey ? 'Tersalin' : 'curl'}
         </button>
+      </summary>
+      <div className="flex flex-col gap-2 pb-2 pl-6 pr-1 pt-1">
+        <p className="text-sm leading-6 text-muted-foreground">{e.desc}</p>
+        {e.body ? (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Contoh body JSON</p>
+            <pre className="tnum mt-1 overflow-x-auto rounded-control bg-muted/60 p-2.5 font-mono text-xs leading-5">
+              {e.body}
+            </pre>
+          </div>
+        ) : null}
+        {e.query && firstMethod(e.method) === 'GET' ? (
+          <p className="tnum break-all font-mono text-xs text-muted-foreground">
+            Contoh: <span className="text-foreground">{e.query}</span>
+          </p>
+        ) : null}
+        {e.resp ? (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Contoh respons data</p>
+            <pre className="tnum mt-1 overflow-x-auto rounded-control bg-muted/60 p-2.5 font-mono text-xs leading-5">
+              {e.resp}
+            </pre>
+          </div>
+        ) : null}
+        {e.note ? <p className="text-[13px] leading-6 text-muted-foreground">ⓘ {e.note}</p> : null}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground">Contoh curl</p>
+          <pre className="tnum mt-1 overflow-x-auto rounded-control bg-muted/60 p-2.5 font-mono text-xs leading-5">
+            {curl}
+          </pre>
+        </div>
       </div>
-      <h3 className="mt-2 text-[15px] font-semibold">{e.title}</h3>
-      <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{e.desc}</p>
-      {e.body ? (
-        <div className="mt-2">
-          <p className="text-xs font-semibold text-muted-foreground">Contoh body JSON</p>
-          <pre className="tnum mt-1 overflow-x-auto rounded-control bg-background p-2.5 font-mono text-xs leading-5">
-            {e.body}
-          </pre>
-        </div>
-      ) : null}
-      {e.query && firstMethod(e.method) === 'GET' ? (
-        <p className="tnum mt-2 break-all font-mono text-xs text-muted-foreground">
-          Contoh: <span className="text-foreground">{e.query}</span>
-        </p>
-      ) : null}
-      {e.resp ? (
-        <div className="mt-2">
-          <p className="text-xs font-semibold text-muted-foreground">Contoh respons data</p>
-          <pre className="tnum mt-1 overflow-x-auto rounded-control bg-background p-2.5 font-mono text-xs leading-5">
-            {e.resp}
-          </pre>
-        </div>
-      ) : null}
-      {e.note ? <p className="mt-2 text-[13px] leading-6 text-muted-foreground">ⓘ {e.note}</p> : null}
-    </li>
+    </details>
   );
 }
 
 export function ApiDocsContent({ host }: { host: string }) {
   const [q, setQ] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [tocOpen, setTocOpen] = useState(false);
+  const [active, setActive] = useState<string>('mulai');
 
   const total = useMemo(() => SECTIONS.reduce((n, s) => n + s.endpoints.length, 0), []);
 
@@ -725,8 +750,28 @@ export function ApiDocsContent({ host }: { host: string }) {
   }
 
   function jump(id: string): void {
+    setActive(id);
+    setTocOpen(false);
     document.getElementById(`docs-${id}`)?.scrollIntoView({ block: 'start' });
   }
+
+  // Tandai seksi aktif saat scroll (ala daftar isi Notion).
+  useEffect(() => {
+    const ids = ['mulai', 'auth', ...SECTIONS.map((s) => s.id)];
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) setActive(entry.target.id.replace('docs-', ''));
+        }
+      },
+      { rootMargin: '-20% 0px -70% 0px' },
+    );
+    for (const id of ids) {
+      const el = document.getElementById(`docs-${id}`);
+      if (el) obs.observe(el);
+    }
+    return () => obs.disconnect();
+  }, []);
 
   const base = host || 'https://domain-milikmu';
   const authSnippet = `curl -H "x-api-key: pn-ISI-API-KEY" "${base}/api/sessions"`;
@@ -750,178 +795,244 @@ const expected = 'sha256=' + crypto
   .digest('hex');
 if (sig !== expected) return res.status(401).end();`;
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold">Dokumentasi API WhatsApp</h1>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Semua yang bisa dilakukan nomor WhatsApp-mu lewat HTTP: konek, kirim 13 jenis pesan,
-          kelola grup, cek kontak, sampai blast massal. {total} endpoint, satu pola yang sama.
-          Halaman ini hanya tampil setelah login.
-        </p>
-      </div>
+  const tocItems: { id: string; title: string }[] = [
+    { id: 'mulai', title: 'Mulai dalam 3 langkah' },
+    { id: 'auth', title: 'Autentikasi & respons' },
+    ...SECTIONS.map((s) => ({ id: s.id, title: s.title })),
+  ];
 
-      <Card title="Mulai dalam 3 langkah">
-        <ol className="flex flex-col gap-2 text-sm leading-6">
-          <li>
-            <b>1. Ambil API key.</b>{' '}
-            <span className="text-muted-foreground">
-              Buka Pengaturan → API Key, buat sekali, simpan baik-baik. Setiap request cukup bawa
-              header <code className="font-mono">x-api-key: pn-…</code>
-            </span>
-          </li>
-          <li>
-            <b>2. Tautkan nomor.</b>{' '}
-            <span className="text-muted-foreground">
-              Buat sesi, ambil QR (atau kode pairing), scan dari HP sampai statusnya{' '}
-              <code className="font-mono">open</code>.
-            </span>
-          </li>
-          <li>
-            <b>3. Kirim pesan pertama.</b>{' '}
-            <span className="text-muted-foreground">Pakai contoh di bawah, ganti nomor dan isi.</span>
-          </li>
-        </ol>
-        <pre className="tnum mt-3 overflow-x-auto rounded-control bg-background p-3 font-mono text-xs leading-5">
-          {firstSnippet}
-        </pre>
+  const toc = (
+    <nav aria-label="Daftar isi dokumentasi" className="flex flex-col gap-0.5">
+      {tocItems.map((t) => (
         <button
+          key={t.id}
           type="button"
-          onClick={() => void copy(firstSnippet, 'Pesan pertama')}
-          className="pressable mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-3 text-[13px] font-semibold hover:bg-muted"
+          onClick={() => jump(t.id)}
+          aria-current={active === t.id ? 'true' : undefined}
+          className={cn(
+            'pressable rounded-control px-2.5 py-1.5 text-left text-sm transition',
+            active === t.id
+              ? 'bg-muted font-semibold text-foreground'
+              : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+          )}
         >
-          {copied === 'Pesan pertama' ? <Check size={14} /> : <Copy size={14} />}{' '}
-          {copied === 'Pesan pertama' ? 'Tersalin!' : 'Salin contoh'}
+          {t.title}
         </button>
-      </Card>
+      ))}
+    </nav>
+  );
 
-      <Card title="Autentikasi & format respons">
-        <p className="text-sm leading-6 text-muted-foreground">
-          Satu header untuk semua endpoint. User hanya bisa menyentuh sesi miliknya (403 bila
-          bukan). Semua respons dibungkus envelope: sukses{' '}
-          <code className="font-mono">{'{ success: true, data }'}</code>, gagal{' '}
-          <code className="font-mono">{'{ success: false, error }'}</code> berisi pesan Bahasa
-          Indonesia.
+  return (
+    <div className="flex items-start gap-8">
+      {/* Sidebar daftar isi (desktop) */}
+      <aside className="sticky top-20 hidden w-56 shrink-0 lg:block">
+        <p className="mb-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Daftar isi
         </p>
-        <pre className="tnum mt-2 overflow-x-auto rounded-control bg-background p-3 font-mono text-xs leading-5">
-          {authSnippet}
-        </pre>
-        <div className="tnum mt-3 grid grid-cols-1 gap-1.5 text-[13px] sm:grid-cols-2">
-          {[
-            ['400', 'Isi body/query tidak valid.'],
-            ['401', 'Tanpa header atau key salah.'],
-            ['403', 'Bukan sesi milikmu.'],
-            ['404', 'Sesi/pesan/grup tidak ketemu.'],
-            ['409', 'Sesi belum open, atau status blast tak cocok.'],
-            ['413', 'Media lewat batas ukuran.'],
-            ['429', 'Kena rate limit, coba lagi nanti.'],
-          ].map(([code, desc]) => (
-            <p key={code} className="flex gap-2">
-              <code className="w-10 shrink-0 font-mono font-bold">{code}</code>
-              <span className="text-muted-foreground">{desc}</span>
-            </p>
-          ))}
+        {toc}
+      </aside>
+
+      {/* Dokumen sempit ala Notion */}
+      <div className="mx-auto flex w-full min-w-0 max-w-[720px] flex-col gap-6">
+        <div>
+          <p className="text-sm text-muted-foreground">📄 Dokumentasi</p>
+          <h1 className="font-display mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
+            API WhatsApp
+          </h1>
+          <p className="mt-2 max-w-2xl text-[15px] leading-7 text-muted-foreground">
+            Semua yang bisa dilakukan nomor WhatsApp-mu lewat HTTP: konek, kirim 13 jenis pesan,
+            kelola grup, cek kontak, sampai blast massal. {total} endpoint, satu pola yang sama.
+            Halaman ini hanya tampil setelah login.
+          </p>
         </div>
-      </Card>
 
-      <nav aria-label="Bagian dokumentasi" className="flex flex-wrap gap-1.5">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => jump(s.id)}
-            className="pressable min-h-9 rounded-full border border-border px-3 text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            {s.title}
-          </button>
-        ))}
-      </nav>
+        {/* Daftar isi (mobile): dropdown di atas dokumen */}
+        <details
+          className="rounded-card border border-border bg-card lg:hidden"
+          open={tocOpen || undefined}
+          onToggle={(e) => setTocOpen((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="notion-toggle flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold">
+            <ListTree size={16} className="text-muted-foreground" />
+            Daftar isi
+          </summary>
+          <div className="border-t border-border p-2">{toc}</div>
+        </details>
 
-      <div className="min-w-0">
-        <TextInput
-          aria-label="Cari endpoint"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Cari: kirim gambar, polling, invite grup…"
-        />
-      </div>
-      <p className="tnum text-xs text-muted-foreground" aria-live="polite">
-        {matches
-          ? `Menampilkan ${matches.length} hasil untuk “${q.trim()}”.`
-          : `${total} endpoint dalam ${SECTIONS.length} bagian.`}
-      </p>
+        <section id="docs-mulai" className="flex scroll-mt-24 flex-col gap-2">
+          <h2 className="font-display text-xl font-bold">Mulai dalam 3 langkah</h2>
+          <ol className="flex flex-col gap-1.5 text-sm leading-6">
+            <li>
+              <b>1. Ambil API key.</b>{' '}
+              <span className="text-muted-foreground">
+                Buka Pengaturan → API Key, buat sekali, simpan baik-baik. Setiap request cukup bawa
+                header <code className="font-mono">x-api-key: pn-…</code>
+              </span>
+            </li>
+            <li>
+              <b>2. Tautkan nomor.</b>{' '}
+              <span className="text-muted-foreground">
+                Buat sesi, ambil QR (atau kode pairing), scan dari HP sampai statusnya{' '}
+                <code className="font-mono">open</code>.
+              </span>
+            </li>
+            <li>
+              <b>3. Kirim pesan pertama.</b>{' '}
+              <span className="text-muted-foreground">Pakai contoh di bawah, ganti nomor dan isi.</span>
+            </li>
+          </ol>
+          <pre className="tnum overflow-x-auto rounded-control bg-muted/60 p-3 font-mono text-xs leading-5">
+            {firstSnippet}
+          </pre>
+          <div>
+            <button
+              type="button"
+              onClick={() => void copy(firstSnippet, 'Pesan pertama')}
+              className="pressable inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-3 text-[13px] font-semibold hover:bg-muted"
+            >
+              {copied === 'Pesan pertama' ? <Check size={14} /> : <Copy size={14} />}{' '}
+              {copied === 'Pesan pertama' ? 'Tersalin!' : 'Salin contoh'}
+            </button>
+          </div>
+        </section>
 
-      {matches ? (
-        <ul className="flex flex-col gap-2">
-          {matches.map(({ section, e }) => (
-            <div key={`${section} ${e.method} ${e.path} ${e.title}`}>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {section}
-              </p>
-              <EndpointCard host={base} e={e} copied={copied} onCopy={(t, l) => void copy(t, l)} />
-            </div>
-          ))}
-        </ul>
-      ) : (
-        SECTIONS.map((s) => (
-          <section key={s.id} id={`docs-${s.id}`} className="flex scroll-mt-20 flex-col gap-2">
-            <div>
-              <h2 className="font-display text-lg font-bold">{s.title}</h2>
-              <p className="mt-0.5 max-w-3xl text-sm leading-6 text-muted-foreground">{s.intro}</p>
-            </div>
-            {s.id === 'webhook' ? (
-              <Card>
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {WEBHOOK_EVENTS.map((w) => (
-                    <li key={w.event} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
-                      <code className="w-36 shrink-0 font-mono text-[13px] font-bold">{w.event}</code>
-                      <span className="leading-6 text-muted-foreground">{w.desc}</span>
+        <section id="docs-auth" className="flex scroll-mt-24 flex-col gap-2">
+          <h2 className="font-display text-xl font-bold">Autentikasi & format respons</h2>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Satu header untuk semua endpoint. User hanya bisa menyentuh sesi miliknya (403 bila
+            bukan). Semua respons dibungkus envelope: sukses{' '}
+            <code className="font-mono">{'{ success: true, data }'}</code>, gagal{' '}
+            <code className="font-mono">{'{ success: false, error }'}</code> berisi pesan Bahasa
+            Indonesia.
+          </p>
+          <pre className="tnum overflow-x-auto rounded-control bg-muted/60 p-3 font-mono text-xs leading-5">
+            {authSnippet}
+          </pre>
+          <ul className="tnum grid grid-cols-1 gap-1 text-[13px] sm:grid-cols-2">
+            {[
+              ['400', 'Isi body/query tidak valid.'],
+              ['401', 'Tanpa header atau key salah.'],
+              ['403', 'Bukan sesi milikmu.'],
+              ['404', 'Sesi/pesan/grup tidak ketemu.'],
+              ['409', 'Sesi belum open, atau status blast tak cocok.'],
+              ['413', 'Media lewat batas ukuran.'],
+              ['429', 'Kena rate limit, coba lagi nanti.'],
+            ].map(([code, desc]) => (
+              <li key={code} className="flex gap-2">
+                <code className="w-10 shrink-0 font-mono font-bold">{code}</code>
+                <span className="text-muted-foreground">{desc}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <div className="min-w-0">
+          <TextInput
+            aria-label="Cari endpoint"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari: kirim gambar, polling, invite grup…"
+          />
+        </div>
+        <p className="tnum -mt-4 text-xs text-muted-foreground" aria-live="polite">
+          {matches
+            ? `Menampilkan ${matches.length} hasil untuk “${q.trim()}”.`
+            : `${total} endpoint dalam ${SECTIONS.length} bagian. Klik judul untuk membuka detail.`}
+        </p>
+
+        {matches ? (
+          <ul className="flex flex-col gap-1">
+            {matches.map(({ section, e }) => (
+              <li key={`${section} ${e.method} ${e.path} ${e.title}`}>
+                <p className="px-2 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {section}
+                </p>
+                <EndpointToggle
+                  host={base}
+                  e={e}
+                  copied={copied}
+                  onCopy={(t, l) => void copy(t, l)}
+                  defaultOpen
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          SECTIONS.map((s) => (
+            <section key={s.id} id={`docs-${s.id}`} className="flex scroll-mt-24 flex-col gap-1">
+              <h2 className="font-display text-xl font-bold">{s.title}</h2>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{s.intro}</p>
+              {s.id === 'webhook' ? (
+                <div className="flex flex-col">
+                  <details className="group rounded-control border border-transparent px-2 py-1 transition hover:border-border hover:bg-card">
+                    <summary className="notion-toggle flex cursor-pointer list-none items-center gap-2.5 py-1.5">
+                      <span
+                        aria-hidden
+                        className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90"
+                      >
+                        →
+                      </span>
+                      <span className="text-sm font-medium">11 event webhook</span>
+                    </summary>
+                    <ul className="flex flex-col gap-1 pb-2 pl-6 pr-1 pt-1 text-sm">
+                      {WEBHOOK_EVENTS.map((w) => (
+                        <li key={w.event} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                          <code className="w-36 shrink-0 font-mono text-[13px] font-bold">{w.event}</code>
+                          <span className="leading-6 text-muted-foreground">{w.desc}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <details className="group rounded-control border border-transparent px-2 py-1 transition hover:border-border hover:bg-card">
+                    <summary className="notion-toggle flex cursor-pointer list-none items-center gap-2.5 py-1.5">
+                      <span
+                        aria-hidden
+                        className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90"
+                      >
+                        →
+                      </span>
+                      <span className="text-sm font-medium">Contoh payload + verifikasi tanda tangan</span>
+                    </summary>
+                    <div className="flex flex-col gap-2 pb-2 pl-6 pr-1 pt-1">
+                      <pre className="tnum overflow-x-auto rounded-control bg-muted/60 p-2.5 font-mono text-xs leading-5">
+                        {payloadSnippet}
+                      </pre>
+                      <pre className="tnum overflow-x-auto rounded-control bg-muted/60 p-2.5 font-mono text-xs leading-5">
+                        {verifySnippet}
+                      </pre>
+                      <p className="text-[13px] leading-6 text-muted-foreground">
+                        Header: <code className="font-mono">x-pansa-event</code> (nama event) +{' '}
+                        <code className="font-mono">x-pansa-signature: sha256=&lt;HMAC hex&gt;</code>.
+                        Timeout 10 detik, tanpa retry — pastikan endpoint-mu merespons cepat.
+                      </p>
+                    </div>
+                  </details>
+                </div>
+              ) : (
+                <ul className="flex flex-col">
+                  {s.endpoints.map((e) => (
+                    <li key={`${e.method} ${e.path}`}>
+                      <EndpointToggle
+                        host={base}
+                        e={e}
+                        copied={copied}
+                        onCopy={(t, l) => void copy(t, l)}
+                      />
                     </li>
                   ))}
                 </ul>
-                <p className="mt-3 text-xs font-semibold text-muted-foreground">
-                  Contoh payload yang diterima server-mu
-                </p>
-                <pre className="tnum mt-1 overflow-x-auto rounded-control bg-background p-2.5 font-mono text-xs leading-5">
-                  {payloadSnippet}
-                </pre>
-                <p className="mt-3 text-xs font-semibold text-muted-foreground">
-                  Verifikasi tanda tangan (Node.js)
-                </p>
-                <pre className="tnum mt-1 overflow-x-auto rounded-control bg-background p-2.5 font-mono text-xs leading-5">
-                  {verifySnippet}
-                </pre>
-                <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                  Header: <code className="font-mono">x-pansa-event</code> (nama event) +{' '}
-                  <code className="font-mono">x-pansa-signature: sha256=&lt;HMAC hex&gt;</code>.
-                  Timeout 10 detik, tanpa retry — pastikan endpoint-mu merespons cepat.
-                </p>
-              </Card>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {s.endpoints.map((e) => (
-                  <EndpointCard
-                    key={`${e.method} ${e.path}`}
-                    host={base}
-                    e={e}
-                    copied={copied}
-                    onCopy={(t, l) => void copy(t, l)}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        ))
-      )}
+              )}
+            </section>
+          ))
+        )}
 
-      {!matches || matches.length > 0 ? null : (
-        <Card>
+        {!matches || matches.length > 0 ? null : (
           <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <BookOpenText size={16} /> Tidak ada yang cocok. Coba kata lain, misal “gambar” atau
             “grup”.
           </p>
-        </Card>
-      )}
+        )}
+      </div>
     </div>
   );
 }

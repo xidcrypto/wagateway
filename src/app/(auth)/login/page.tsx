@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { motion } from 'motion/react';
 import { Eye, EyeOff, Lock, UserRound } from 'lucide-react';
 import { ApiError, getMe, getSiteInfo, getToken, login, setToken } from '@/lib/client/api';
 import { TextInput } from '@/components/ui/Fields';
 import { Button } from '@/components/ui/Button';
-import { ThemeIconButton } from '@/components/layout/ThemeToggle';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -73,27 +72,23 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-control bg-primary font-display text-xl font-bold text-primary-foreground">
-            {siteName.trim().charAt(0).toUpperCase() || 'P'}
-          </span>
-          <span className="text-lg font-semibold tracking-tight">{siteName}</span>
-          <div className="absolute right-4 top-4">
-            <ThemeIconButton />
-          </div>
+    <AuthShell
+      siteName={siteName}
+      siteTagline={siteTagline}
+      title="Masuk"
+      subtitle={siteTagline}
+      footer={
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <Link href="/forgot-password" className="text-muted-foreground hover:text-foreground">
+            Lupa password?
+          </Link>
+          <Link href="/register" className="font-medium text-foreground hover:underline">
+            Daftar akun
+          </Link>
         </div>
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="rounded-card border border-border bg-card p-6 shadow-1"
-        >
-          <h1 className="text-2xl font-bold tracking-tight">Masuk</h1>
-          <p className="mb-6 mt-1 text-sm text-muted-foreground">{siteTagline}</p>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div className="relative">
               <UserRound size={16} className="pointer-events-none absolute left-3 top-[38px] text-muted-foreground" />
               <div className="[&_input]:pl-9">
@@ -142,17 +137,6 @@ export default function LoginPage() {
               {loading ? 'Memproses…' : 'Masuk'}
             </Button>
           </form>
-
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <Link href="/forgot-password" className="text-muted-foreground hover:text-foreground">
-              Lupa password?
-            </Link>
-            <Link href="/register" className="font-medium text-foreground hover:underline">
-              Daftar akun
-            </Link>
-          </div>
-        </motion.div>
-      </div>
-    </main>
+    </AuthShell>
   );
 }

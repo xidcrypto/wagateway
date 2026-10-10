@@ -3,11 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { motion } from 'motion/react';
 import { ApiError, getMe, getSiteInfo, getToken, register, setToken } from '@/lib/client/api';
 import { TextInput } from '@/components/ui/Fields';
 import { Button } from '@/components/ui/Button';
-import { ThemeIconButton } from '@/components/layout/ThemeToggle';
+import { AuthShell } from '@/components/auth/AuthShell';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -79,28 +78,20 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-control bg-primary font-display text-xl font-bold text-primary-foreground">
-            {siteName.trim().charAt(0).toUpperCase() || 'P'}
-          </span>
-          <span className="text-lg font-semibold tracking-tight">{siteName}</span>
-        </div>
-        <div className="absolute right-4 top-4">
-          <ThemeIconButton />
-        </div>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full rounded-card border border-border bg-card p-6 shadow-1"
-      >
-        <h1 className="font-display text-center text-2xl font-bold">Daftar Akun</h1>
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          Buat akun {siteName} baru
+    <AuthShell
+      siteName={siteName}
+      siteTagline="Satu dasbor untuk semua nomor WhatsApp operasionalmu."
+      title="Daftar Akun"
+      subtitle={`Buat akun ${siteName} baru`}
+      footer={
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Sudah punya akun?{' '}
+          <Link href="/login" className="font-medium text-foreground hover:underline">
+            Masuk
+          </Link>
         </p>
-
+      }
+    >
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
           <TextInput
             label="Username"
@@ -168,15 +159,6 @@ export default function RegisterPage() {
             {loading ? 'Memproses…' : 'Daftar'}
           </Button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Sudah punya akun?{' '}
-          <Link href="/login" className="font-medium text-foreground hover:underline">
-            Masuk
-          </Link>
-        </p>
-      </motion.div>
-      </div>
-    </main>
+    </AuthShell>
   );
 }

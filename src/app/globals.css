@@ -251,6 +251,43 @@ body {
   }
 }
 
+/* Pola dot-grid halus untuk hero landing & panel auth (SVG, tanpa gradient). */
+.dot-grid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1.5' fill='%2318181b' fill-opacity='0.08'/%3E%3C/svg%3E");
+  background-size: 22px 22px;
+}
+.dark .dot-grid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1.5' fill='%23fafafa' fill-opacity='0.09'/%3E%3C/svg%3E");
+}
+
+/* Pola garis diagonal untuk aksen panel auth (SVG, tanpa gradient). */
+.stripe-accent {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M-3 15 L15 -3' stroke='%23fafafa' stroke-opacity='0.25' stroke-width='2'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
+}
+
+/* Reveal-on-scroll: elemen muncul saat masuk viewport (diobservasi oleh <Reveal/>). */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Toggle Notion: hilangkan marker bawaan, pakai segitiga sendiri. */
+.notion-toggle {
+  list-style: none;
+}
+.notion-toggle::-webkit-details-marker {
+  display: none;
+}
+.notion-toggle::marker {
+  content: '';
+}
+
 /* Hormati reduced-motion: matikan dekoratif. */
 @media (prefers-reduced-motion: reduce) {
   .orb-open::before,
@@ -270,6 +307,11 @@ body {
   .page-enter {
     animation: none;
   }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
   *,
   *::before,
   *::after {
@@ -287,6 +329,11 @@ html.reduce-motion .orb-blink,
 html.reduce-motion .scanline,
 html.reduce-motion .page-enter {
   animation: none;
+}
+html.reduce-motion .reveal {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 html.reduce-motion .orb-open::before,
 html.reduce-motion .orb-open::after {

@@ -6,16 +6,20 @@ export function Card({
   action,
   children,
   className = '',
+  hover = false,
 }: {
   title?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Efek angkat saat hover (untuk kartu yang bisa diklik). */
+  hover?: boolean;
 }) {
   return (
     <section
       className={cn(
         'rounded-card border border-border bg-card p-4 shadow-1 sm:p-5',
+        hover && 'transition hover:-translate-y-0.5 hover:shadow-2',
         className,
       )}
     >
