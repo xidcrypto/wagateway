@@ -7,6 +7,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   BookUser,
   ChevronLeft,
+  Gauge,
+  Globe,
+  Inbox,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -39,8 +42,16 @@ const NAV: NavItem[] = [
   { href: '/groups', label: 'Grup', icon: <Users size={19} /> },
   { href: '/contacts', label: 'Kontak', icon: <BookUser size={19} /> },
   { href: '/blast', label: 'Blast', icon: <Megaphone size={19} /> },
-  { href: '/admin', label: 'Admin', icon: <ShieldCheck size={19} />, adminOnly: true },
   { href: '/settings', label: 'Pengaturan', icon: <Settings size={19} /> },
+];
+
+/** Seksi khusus admin di sidebar: tiap item = halaman terpisah, tanpa tab. */
+const ADMIN_NAV: NavItem[] = [
+  { href: '/admin', label: 'Dashboard admin', icon: <Gauge size={19} />, adminOnly: true },
+  { href: '/admin/users', label: 'Pengguna', icon: <Users size={19} />, adminOnly: true },
+  { href: '/admin/sessions', label: 'Semua session', icon: <Smartphone size={19} />, adminOnly: true },
+  { href: '/admin/audit', label: 'Audit pesan', icon: <Inbox size={19} />, adminOnly: true },
+  { href: '/admin/web', label: 'Pengaturan web', icon: <Globe size={19} />, adminOnly: true },
 ];
 
 const TITLES: Record<string, string> = {
@@ -51,11 +62,11 @@ const TITLES: Record<string, string> = {
   '/groups': 'Grup',
   '/contacts': 'Kontak',
   '/blast': 'Blast',
-  '/admin': 'Admin',
-  '/admin/users': 'Admin · Pengguna',
-  '/admin/sessions': 'Admin · Session',
-  '/admin/audit': 'Admin · Audit pesan',
-  '/admin/web': 'Admin · Web',
+  '/admin': 'Dashboard admin',
+  '/admin/users': 'Pengguna',
+  '/admin/sessions': 'Semua session',
+  '/admin/audit': 'Audit pesan',
+  '/admin/web': 'Pengaturan web',
   '/settings': 'Pengaturan',
 };
 
@@ -80,7 +91,42 @@ function SidebarBody({
   onNavigate: () => void;
   onLogout: () => void;
 }) {
-  const items = NAV.filter((n) => !n.adminOnly || user?.role === 'admin');
+  const items = NAV;
+  const adminItems = ADMIN_NAV.filter((n) => user?.role === 'admin');
+  // Item admin aktif bila path persis atau di bawahnya (kecuali /admin yang exact).
+  function navActive(href: string): boolean {
+    if (href === '/admin') return pathname === '/admin';
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+  function renderItem(n: NavItem) {
+    const active = navActive(n.href);
+    return (
+      <Link
+        key={n.href}
+        href={n.href}
+        onClick={onNavigate}
+        title={collapsed ? n.label : undefined}
+        aria-current={active ? 'page' : undefined}
+        className={cn(
+          'relative flex min-h-11 items-center gap-3 rounded-control px-3 text-sm transition',
+          collapsed && 'justify-center px-0',
+          active
+            ? 'font-semibold text-foreground'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        )}
+      >
+        {active ? (
+          <motion.span
+            layoutId="nav-pill"
+            transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+            className="absolute inset-0 rounded-control bg-muted"
+          />
+        ) : null}
+        <span className="relative z-10">{n.icon}</span>
+        {collapsed ? null : <span className="relative z-10">{n.label}</span>}
+      </Link>
+    );
+  }
   return (
     <div className="flex h-full flex-col">
       <Link
@@ -102,35 +148,28 @@ function SidebarBody({
         )}
       </Link>
       <nav className="relative flex flex-1 flex-col gap-1 overflow-y-auto px-3" aria-label="Navigasi utama">
-        {items.map((n) => {
-          const active = pathname === n.href || pathname.startsWith(n.href + '/');
-          return (
-            <Link
-              key={n.href}
-              href={n.href}
-              onClick={onNavigate}
-              title={collapsed ? n.label : undefined}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'relative flex min-h-11 items-center gap-3 rounded-control px-3 text-sm transition',
-                collapsed && 'justify-center px-0',
-                active
-                  ? 'font-semibold text-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {active ? (
-                <motion.span
-                  layoutId="nav-pill"
-                  transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                  className="absolute inset-0 rounded-control bg-muted"
-                />
-              ) : null}
-              <span className="relative z-10">{n.icon}</span>
-              {collapsed ? null : <span className="relative z-10">{n.label}</span>}
-            </Link>
-          );
-        })}
+        {items.map(renderItem)}
+        {adminItems.length > 0 ? (
+          <>
+            {collapsed ? (
+              <span className="mx-2 my-1 border-t border-border" aria-hidden="true" />
+            ) : (
+              <p className="flex items-center gap-1.5 px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <ShieldCheck size={12} /> Admin
+              </p>
+            )}
+            {adminItems.map(renderItem)}
+            {collapsed ? null : (
+              <Link
+                href="/settings"
+                onClick={onNavigate}
+                className="mt-1 flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Profil & akun ada di Pengaturan →
+              </Link>
+            )}
+          </>
+        ) : null}
       </nav>
       <div className="border-t border-border p-3">
         {collapsed ? (

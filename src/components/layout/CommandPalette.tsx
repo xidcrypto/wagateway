@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   BookUser,
+  Gauge,
+  Globe,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -14,7 +17,6 @@ import {
   Moon,
   Plus,
   Settings,
-  ShieldCheck,
   Smartphone,
   Sun,
   Users,
@@ -29,11 +31,11 @@ const PAGES = [
   { href: '/groups', label: 'Grup', icon: Users },
   { href: '/contacts', label: 'Kontak', icon: BookUser },
   { href: '/blast', label: 'Blast', icon: Megaphone },
-  { href: '/admin', label: 'Admin · Ringkasan', icon: ShieldCheck, adminOnly: true },
-  { href: '/admin/users', label: 'Admin · Pengguna', icon: ShieldCheck, adminOnly: true },
-  { href: '/admin/sessions', label: 'Admin · Session', icon: ShieldCheck, adminOnly: true },
-  { href: '/admin/audit', label: 'Admin · Audit pesan', icon: ShieldCheck, adminOnly: true },
-  { href: '/admin/web', label: 'Admin · Web', icon: ShieldCheck, adminOnly: true },
+  { href: '/admin', label: 'Dashboard admin', icon: Gauge, adminOnly: true },
+  { href: '/admin/users', label: 'Pengguna (admin)', icon: Users, adminOnly: true },
+  { href: '/admin/sessions', label: 'Semua session (admin)', icon: Smartphone, adminOnly: true },
+  { href: '/admin/audit', label: 'Audit pesan (admin)', icon: Inbox, adminOnly: true },
+  { href: '/admin/web', label: 'Pengaturan web (admin)', icon: Globe, adminOnly: true },
   { href: '/settings', label: 'Pengaturan', icon: Settings },
 ];
 
