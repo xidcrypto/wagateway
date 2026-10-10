@@ -1194,7 +1194,7 @@ export function getTicket(id: number): Promise<{ ticket: TicketDetail }> {
   return api(`/api/tickets/${id}`);
 }
 
-/** Balas tiket milik sendiri (409 bila sudah ditutup; stagedId opsional). */
+/** Balas tiket milik sendiri (409 bila sudah ditutup permanen; stagedId opsional). */
 export function replyTicket(
   id: number,
   message: string,
@@ -1202,7 +1202,9 @@ export function replyTicket(
 ): Promise<{ replied: boolean; message: TicketMessage }> {
   return api(`/api/tickets/${id}`, {
     method: 'POST',
-    body: JSON.stringify({ message, stagedId: stagedId ?? null }),
+    // Tanpa gambar: key stagedId dihilangkan (undefined), bukan null —
+    // server tetap toleran null, tapi bersih lebih baik.
+    body: JSON.stringify(stagedId == null ? { message } : { message, stagedId }),
   });
 }
 
@@ -1437,7 +1439,7 @@ export function replyAdminTicket(
 ): Promise<{ replied: boolean; message: TicketMessage }> {
   return api(`/api/admin/tickets/${id}`, {
     method: 'POST',
-    body: JSON.stringify({ message, stagedId: stagedId ?? null }),
+    body: JSON.stringify(stagedId == null ? { message } : { message, stagedId }),
   });
 }
 

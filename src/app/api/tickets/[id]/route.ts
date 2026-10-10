@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
 const replySchema = z.object({
   message: z.string().max(2000, 'Pesan maksimal 2000 karakter.').optional().default(''),
   // ID file staged (dari POST /stage). Bila ada, pesan memakai file itu.
-  stagedId: z.number().int().positive().optional(),
+  // Terima null (client kirim null bila tanpa gambar) + undefined.
+  stagedId: z.number().int().positive().nullish(),
 });
 
 function toDetail(t: {

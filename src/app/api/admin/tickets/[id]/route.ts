@@ -19,7 +19,8 @@ export const dynamic = 'force-dynamic';
 
 const replySchema = z.object({
   message: z.string().max(2000, 'Pesan maksimal 2000 karakter.').optional().default(''),
-  stagedId: z.number().int().positive().optional(),
+  // Terima null (client kirim null bila tanpa gambar) + undefined.
+  stagedId: z.number().int().positive().nullish(),
 });
 
 const statusSchema = z.object({
