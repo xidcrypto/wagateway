@@ -22,7 +22,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
-import { useVisiblePoll } from '@/lib/client/use-poll';
+import { useLiveEvents } from '@/lib/client/use-live';
 import {
   ApiError,
   blastAction,
@@ -199,14 +199,39 @@ function BlastDetailView({
     };
   }, [sessionId, blastId]);
 
-  // Polling cerdas: hanya saat masih running, berhenti saat tab tak terlihat.
-  useVisiblePoll(
-    () => {
-      void load(true);
+  // Live SSE-first: progres blast di-push tiap 5 penerima + saat selesai.
+  // Fallback polling 8 dtk bila SSE mati (hanya saat running).
+  useLiveEvents({
+    onBlast: (ev) => {
+      if (ev.blastId !== blastId) return;
+      setStats((prev) => {
+        const next = {
+          pending: ev.data.pending,
+          sent: ev.data.sent,
+          failed: ev.data.failed,
+          total: prev.total,
+        };
+        if (
+          prev.pending === next.pending &&
+          prev.sent === next.sent &&
+          prev.failed === next.failed
+        ) {
+          return prev;
+        }
+        return next;
+      });
+      if (ev.data.finished || ev.data.status) {
+        // Status akhir berubah (done/failed/paused): sinkronkan detail penuh.
+        void load(true);
+      }
     },
-    3000,
-    detail?.status === 'running',
-  );
+    onPoll: () => {
+      if (detail?.status === 'running') void load(true);
+    },
+    fallbackMs: 8000,
+    pollMs: 8000,
+    enabled: detail?.status === 'running',
+  });
 
   async function handle(action: 'pause' | 'resume' | 'cancel'): Promise<void> {
     setBusy(true);
@@ -463,13 +488,19 @@ export default function BlastPage() {
 
   // Polling daftar saat ada campaign berjalan (p moves → done tanpa reload).
   const hasRunning = blasts.some((b) => b.status === 'running');
-  useVisiblePoll(
-    () => {
+  // Live SSE-first untuk daftar: status campaign berubah → muat ulang
+  // (hanya bila ada yang running dan tidak sedang melihat detail).
+  useLiveEvents({
+    onBlast: () => {
       if (sessionId && selected === null) void loadBlasts(sessionId);
     },
-    5000,
-    hasRunning && selected === null,
-  );
+    onPoll: () => {
+      if (sessionId && selected === null && hasRunning) void loadBlasts(sessionId);
+    },
+    fallbackMs: 8000,
+    pollMs: 8000,
+    enabled: hasRunning && selected === null,
+  });
 
   const summary = useMemo(() => summarizeRecipients(recipients), [recipients]);
   const vars = useMemo(() => detectVars(text), [text]);

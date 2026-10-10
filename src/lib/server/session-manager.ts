@@ -89,6 +89,25 @@ function emit(ev: SessionEvent): void {
       // Pendengar tidak boleh menjatuhkan manager.
     }
   }
+  // Teruskan ke bus live SSE (dashboard real-time). Import dinamis agar tidak
+  // ada siklus import dengan live-bus; kegagalan tidak boleh mengganggu emit.
+  try {
+    const g = globalThis as unknown as {
+      __pansaLiveBus?: { listeners: Set<(e: SessionEvent) => void> };
+    };
+    const bus = g.__pansaLiveBus;
+    if (bus) {
+      for (const listener of bus.listeners) {
+        try {
+          listener(ev);
+        } catch {
+          // Abaikan.
+        }
+      }
+    }
+  } catch {
+    // Abaikan.
+  }
 }
 
 function sessionsDir(): string {

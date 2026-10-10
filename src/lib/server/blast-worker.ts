@@ -343,15 +343,68 @@ async function finishIfDone(blastId: number): Promise<void> {
   const failed = await prisma.blastRecipient.count({
     where: { blastId, status: 'failed' },
   });
+  const sent = await prisma.blastRecipient.count({
+    where: { blastId, status: 'sent' },
+  });
+  const status = failed > 0 ? 'failed' : 'done';
   await prisma.blast.update({
     where: { id: blastId },
     data: {
-      status: failed > 0 ? 'failed' : 'done',
+      status,
       finishedAt: new Date(),
       error: failed > 0 ? `${failed} penerima gagal.` : null,
     },
   });
+  publishBlastProgress(blastId, { status, sent, failed, pending: 0, finished: true });
 }
+
+/** Siarkan progres blast ke bus live (dipakai SSE dashboard). Tak pernah melempar. */
+function publishBlastProgress(
+  blastId: number,
+  stats: { sent: number; failed: number; pending: number; status?: string; finished?: boolean },
+): void {
+  try {
+    const g = globalThis as unknown as {
+      __pansaLiveBus?: { listeners: Set<(e: BlastLiveEvent) => void> };
+    };
+    const bus = g.__pansaLiveBus;
+    if (!bus || bus.listeners.size === 0) return;
+    const ev: BlastLiveEvent = {
+      event: 'blast.progress',
+      blastId,
+      timestamp: new Date().toISOString(),
+      data: {
+        sent: stats.sent,
+        failed: stats.failed,
+        pending: stats.pending,
+        ...(stats.status ? { status: stats.status } : {}),
+        ...(stats.finished ? { finished: true } : {}),
+      },
+    };
+    for (const listener of bus.listeners) {
+      try {
+        listener(ev);
+      } catch {
+        // Abaikan.
+      }
+    }
+  } catch {
+    // Abaikan.
+  }
+}
+
+type BlastLiveEvent = {
+  event: 'blast.progress';
+  blastId: number;
+  timestamp: string;
+  data: {
+    sent: number;
+    failed: number;
+    pending: number;
+    status?: string;
+    finished?: boolean;
+  };
+};
 
 async function runLoop(blastId: number): Promise<void> {
   // Jeda diukur dari MULAI kirim nomor sebelumnya (start-to-start,
@@ -413,6 +466,19 @@ async function runLoop(blastId: number): Promise<void> {
     targetWait = randomDelay(blast.delayMin, blast.delayMax);
     await sendOne(sock, blast.sessionId, blast, recipient);
     await finishIfDone(blastId);
+    // Siarkan progres tiap 1 penerima (throttle ringan: tiap 5).
+    try {
+      const [sent, failed, pending] = await Promise.all([
+        prisma.blastRecipient.count({ where: { blastId, status: 'sent' } }),
+        prisma.blastRecipient.count({ where: { blastId, status: 'failed' } }),
+        prisma.blastRecipient.count({ where: { blastId, status: 'pending' } }),
+      ]);
+      if ((sent + failed) % 5 === 0 || pending === 0) {
+        publishBlastProgress(blastId, { sent, failed, pending });
+      }
+    } catch {
+      // Progres SSE opsional; DB tetap sumber kebenaran.
+    }
   }
 }
 

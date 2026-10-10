@@ -13,6 +13,7 @@ import { Avatar, CopyButton } from '@/components/ui/Avatar';
 import { Menu, TabList } from '@/components/ui/Controls';
 import { toast } from '@/components/ui/Toast';
 import { useVisiblePoll } from '@/lib/client/use-poll';
+import { useLiveEvents } from '@/lib/client/use-live';
 import {
   ApiError,
   cancelPairingCode,
@@ -290,18 +291,44 @@ function SessionCard({
     };
   }, [session.id, st]);
 
-  useVisiblePoll(async () => {
-    try {
-      const s = await getSessionStatus(session.id);
-      setStatus((prev) => {
-        if (JSON.stringify(prev) !== JSON.stringify(s)) return s;
-        return prev;
-      });
-      if (s.status === 'open' || s.status === 'logged_out') onChanged();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 404) onDeleted();
-    }
-  }, 3000);
+  // Live SSE-first: status session di-push server (qr/connected/
+  // disconnected/logged_out/stopped). Fallback polling 8 dtk bila SSE mati.
+  const { connected: liveConnected } = useLiveEvents({
+    onSession: (ev) => {
+      if (ev.sessionId !== session.id) return;
+      const name = (ev.event ?? '').toString();
+      if (['qr', 'connected', 'disconnected', 'logged_out', 'stopped'].includes(name)) {
+        void (async () => {
+          try {
+            const s = await getSessionStatus(session.id);
+            setStatus((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(s)) return s;
+              return prev;
+            });
+            if (s.status === 'open' || s.status === 'logged_out') onChanged();
+          } catch (e) {
+            if (e instanceof ApiError && e.status === 404) onDeleted();
+          }
+        })();
+      }
+    },
+    onPoll: () => {
+      void (async () => {
+        try {
+          const s = await getSessionStatus(session.id);
+          setStatus((prev) => {
+            if (JSON.stringify(prev) !== JSON.stringify(s)) return s;
+            return prev;
+          });
+          if (s.status === 'open' || s.status === 'logged_out') onChanged();
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 404) onDeleted();
+        }
+      })();
+    },
+    fallbackMs: 8000,
+    pollMs: 8000,
+  });
 
   useEffect(() => {
     if (prevStatus.current !== 'open' && st === 'open') {
@@ -391,6 +418,9 @@ function SessionCard({
           </p>
           <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground/70" title={session.id}>
             {session.id}
+          </p>
+          <p className="tnum mt-1 text-[11px] text-muted-foreground" title={liveConnected ? 'Status diperbarui real-time' : 'SSE terputus, memakai polling cadangan'}>
+            {liveConnected ? '● live' : '○ polling'}
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">

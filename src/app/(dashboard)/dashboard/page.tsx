@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
 import { MessageDonut } from '@/components/dashboard/MessageDonut';
 import { useCountUp } from '@/lib/client/use-effects';
+import { useLiveEvents } from '@/lib/client/use-live';
 import {
   ApiError,
   getMe,
@@ -102,6 +103,22 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }
+
+  // Live SSE-first: muat ulang statistik saat ada pesan/session berubah.
+  // Tanpa interval — hemat request, data selalu segar. Fallback: tombol
+  // "Muat ulang" manual bila SSE mati.
+  const { connected: dashLive } = useLiveEvents({
+    onSession: () => {
+      void load();
+    },
+    onPoll: () => {
+      // SSE sunyi: jangan spam reload tiap 5 dtk untuk dashboard
+      // (datanya agregat berat). User pakai tombol muat ulang.
+    },
+    fallbackMs: 8000,
+    pollMs: 30000,
+    enabled: !loading,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -205,14 +222,31 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-[13px] text-muted-foreground">{today}</p>
-        <h1 className="font-display mt-0.5 text-2xl font-bold">
-          {name ? `Selamat datang kembali, ${name.split(' ')[0]}` : 'Dashboard'}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ini yang sedang terjadi: {msg.today} pesan hari ini · {openCount} dari {totalSessions} session terhubung.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[13px] text-muted-foreground">{today}</p>
+          <h1 className="font-display mt-0.5 text-2xl font-bold">
+            {name ? `Selamat datang kembali, ${name.split(' ')[0]}` : 'Dashboard'}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ini yang sedang terjadi: {msg.today} pesan hari ini · {openCount} dari {totalSessions} session terhubung.{' '}
+            <span title={dashLive ? 'Data diperbarui real-time' : 'SSE terputus'}>
+              {dashLive ? '● live' : '○ offline'}
+            </span>
+          </p>
+        </div>
+        {!dashLive && !loading ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+          >
+            Muat ulang
+          </Button>
+        ) : null}
       </div>
 
       {error ? (

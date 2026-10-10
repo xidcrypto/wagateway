@@ -10,7 +10,7 @@ import { StatusOrb } from '@/components/ui/StatusOrb';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState, Skeleton } from '@/components/ui/States';
 import { toast } from '@/components/ui/Toast';
-import { useVisiblePoll } from '@/lib/client/use-poll';
+import { useLiveEvents } from '@/lib/client/use-live';
 import { cn } from '@/lib/client/cn';
 import {
   ApiError,
@@ -142,30 +142,54 @@ export default function ChatPage() {
     };
   }, [sessionId]);
 
-  useVisiblePoll(
-    async () => {
-      if (!sessionId || !remoteJid) return;
-      try {
-        const r = await getHistory(sessionId, remoteJid, 50);
-        const fresh = [...r.messages].reverse();
-        setMessages((prev) => {
-          const pend = prev.filter((m) => m.pending);
-          const prevIds = new Set(prev.filter((m) => !m.pending).map((m) => m.id));
-          const freshNew = fresh.filter((m) => !prevIds.has(m.id));
-          if (freshNew.length === 0 && pend.length === prev.filter((m) => m.pending).length) {
-            // Data sama kecuali pending: hindari render ulang.
-            if (fresh.length === prev.filter((m) => !m.pending).length) return prev;
-          }
-          if (!stickBottom && freshNew.length > 0) setHasNew(true);
-          return [...fresh, ...pend];
-        });
-      } catch {
-        // Abaikan sesaat.
+  // Live SSE-first: pesan masuk / status dibalas server via event
+  // message + message.status. Fallback polling 5 dtk bila SSE mati.
+  async function refreshThread(): Promise<void> {
+    if (!sessionId || !remoteJid) return;
+    try {
+      const r = await getHistory(sessionId, remoteJid, 50);
+      const fresh = [...r.messages].reverse();
+      setMessages((prev) => {
+        const pend = prev.filter((m) => m.pending);
+        const prevIds = new Set(prev.filter((m) => !m.pending).map((m) => m.id));
+        const freshNew = fresh.filter((m) => !prevIds.has(m.id));
+        if (freshNew.length === 0 && pend.length === prev.filter((m) => m.pending).length) {
+          // Data sama kecuali pending: hindari render ulang.
+          if (fresh.length === prev.filter((m) => !m.pending).length) return prev;
+        }
+        if (!stickBottom && freshNew.length > 0) setHasNew(true);
+        return [...fresh, ...pend];
+      });
+    } catch {
+      // Abaikan sesaat.
+    }
+  }
+
+  const { connected: chatLive } = useLiveEvents({
+    onSession: (ev) => {
+      if (ev.sessionId !== sessionId) return;
+      if (ev.event === 'message' || ev.event === 'message.status') {
+        const jid =
+          typeof ev.data === 'object' && ev.data !== null
+            ? (ev.data as { remoteJid?: unknown }).remoteJid
+            : undefined;
+        if (typeof jid === 'string' && jid !== remoteJid) {
+          // Pesan untuk kontak lain: segarkan daftar kontak saja.
+          void listConversations(sessionId)
+            .then((r) => setConvs(r.conversations))
+            .catch(() => {});
+          return;
+        }
+        void refreshThread();
       }
     },
-    3000,
-    Boolean(sessionId && remoteJid),
-  );
+    onPoll: () => {
+      void refreshThread();
+    },
+    fallbackMs: 8000,
+    pollMs: 5000,
+    enabled: Boolean(sessionId && remoteJid),
+  });
 
   // Scroll mengikuti bawah hanya bila user sedang di bawah (auto-scroll cerdas).
   // hasNew dibersihkan di onScroll / tombol "Pesan baru", bukan di sini.
@@ -492,24 +516,13 @@ export default function ChatPage() {
     </div>
   ) : null;
 
-  async function refreshThread(): Promise<void> {
-    if (!sessionId || !remoteJid) return;
-    try {
-      const r = await getHistory(sessionId, remoteJid, 50);
-      setMessages([...r.messages].reverse());
-      setStickBottom(true);
-    } catch {
-      // Abaikan sesaat.
-    }
-  }
-
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="font-display text-2xl font-bold">Chat</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Balas percakapan langsung. Polling tiap 3 detik, berhenti saat tab disembunyikan.
+            Balas percakapan langsung. {chatLive ? 'Terhubung real-time.' : 'Mode cadangan (polling), SSE terputus.'}
           </p>
         </div>
         <div className="w-full max-w-64">
