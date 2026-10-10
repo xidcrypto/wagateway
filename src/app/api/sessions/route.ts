@@ -15,6 +15,19 @@ const createSessionSchema = z.object({
   ownerId: z.number().int().positive().optional(),
 });
 
+/**
+ * Batas session aktif per user (maks 2 koneksi WhatsApp).
+ * Dihitung hanya session yang masih bisa konek (selain stopped/logged_out).
+ * Bisa diubah via env MAX_SESSIONS_PER_USER, default 2.
+ */
+function maxSessionsPerUser(): number {
+  const raw = Number(process.env.MAX_SESSIONS_PER_USER ?? '2');
+  if (!Number.isFinite(raw) || raw < 1) return 2;
+  return Math.floor(raw);
+}
+
+const INACTIVE_STATUSES = ['stopped', 'logged_out'] as const;
+
 async function resolveOwnerId(ctxUserId: number, bodyOwnerId?: number): Promise<number | null> {
   // Admin virtual (Master API key, id 0): owner dari body, atau admin seed.
   if (ctxUserId === 0) {
@@ -55,6 +68,24 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const ownerId = await resolveOwnerId(ctx.user.id, bodyOwnerId);
   if (ctx.user.id === 0 && ownerId === null) {
     return fail('owner_id tidak valid atau tidak ada admin di database.', 400);
+  }
+
+  // Batas maks koneksi per user (tidak berlaku untuk admin/master key).
+  const limit = maxSessionsPerUser();
+  const realOwner = await prisma.user.findUnique({
+    where: { id: ownerId ?? -1 },
+    select: { id: true, role: true },
+  });
+  if (realOwner && realOwner.role !== 'admin') {
+    const active = await prisma.session.count({
+      where: { ownerId: realOwner.id, NOT: { status: { in: [...INACTIVE_STATUSES] } } },
+    });
+    if (active >= limit) {
+      return fail(
+        `Batas maksimal ${limit} koneksi WhatsApp per user tercapai. Hapus atau logout session yang tidak dipakai dulu.`,
+        409,
+      );
+    }
   }
 
   const created = await prisma.session.create({

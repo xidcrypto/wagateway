@@ -350,7 +350,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="Tutup menu"
                 onClick={() => setDrawer(false)}
-                className="pressable absolute right-2 top-3 rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="pressable absolute right-2 top-3 inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X size={18} />
               </button>
@@ -375,7 +375,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               type="button"
               aria-label="Buka menu"
               onClick={() => setDrawer(true)}
-              className="pressable rounded-control p-2.5 text-foreground hover:bg-muted md:hidden"
+              className="pressable inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2.5 text-foreground hover:bg-muted md:hidden"
             >
               <Menu size={20} />
             </button>

@@ -664,7 +664,7 @@ function EndpointToggle({
             ev.preventDefault();
             onCopy(curl, curlKey);
           }}
-          className="pressable inline-flex min-h-8 shrink-0 items-center gap-1 rounded-control border border-border px-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="pressable inline-flex min-h-10 shrink-0 items-center gap-1 rounded-control border border-border px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           {copied === curlKey ? <Check size={13} /> : <Copy size={13} />}
           {copied === curlKey ? 'Tersalin' : 'curl'}

@@ -39,7 +39,7 @@ export function ThemeToggle({ compact }: { compact?: boolean }) {
             aria-pressed={active}
             onClick={() => setTheme(o.value)}
             className={cn(
-              'pressable flex min-h-9 items-center gap-1.5 rounded-[6px] px-2.5 text-[13px] font-medium transition',
+              'pressable flex min-h-10 items-center gap-1.5 rounded-[6px] px-2.5 text-[13px] font-medium transition',
               active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
               compact && 'px-2',
             )}

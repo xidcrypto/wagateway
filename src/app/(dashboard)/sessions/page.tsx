@@ -605,7 +605,7 @@ export default function SessionsPage() {
           <h1 className="font-display text-2xl font-bold">Sessions</h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Kelola koneksi WhatsApp. Status diperbarui otomatis tiap 3 detik,
-            berhenti saat tab tidak terlihat.
+            berhenti saat tab tidak terlihat. Maksimal 2 koneksi aktif per user.
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)}>
@@ -653,6 +653,10 @@ export default function SessionsPage() {
               placeholder="mis. CS-1"
               required
             />
+            <p className="text-xs leading-5 text-muted-foreground">
+              Maksimal 2 koneksi WhatsApp per user. Session yang di-stop (logout)
+              tidak dihitung — hapus atau logout session yang tidak dipakai bila penuh.
+            </p>
             <Button type="submit" disabled={creating}>
               {creating ? 'Membuat…' : 'Buat session'}
             </Button>

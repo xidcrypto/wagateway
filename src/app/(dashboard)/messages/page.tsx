@@ -319,7 +319,7 @@ export default function MessagesPage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-lg font-semibold">Detail pesan</h2>
               <Dialog.Close asChild>
-                <button type="button" aria-label="Tutup detail" className="pressable rounded-control p-2 hover:bg-muted">
+                <button type="button" aria-label="Tutup detail" className="pressable inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2 hover:bg-muted">
                   <X size={18} />
                 </button>
               </Dialog.Close>

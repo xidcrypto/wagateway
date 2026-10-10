@@ -46,7 +46,9 @@ export function Reveal({
     <Tag
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ref={ref as any}
-      className={cn('reveal', className)}
+      // overflow-clip: konten yang sedang beranimasi translate tidak boleh
+      // menambah lebar halaman (penyebab scroll horizontal di landing).
+      className={cn('reveal overflow-clip', className)}
       style={delayMs > 0 ? { transitionDelay: `${delayMs}ms` } : undefined}
     >
       {children}

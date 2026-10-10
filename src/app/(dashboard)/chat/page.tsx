@@ -357,7 +357,7 @@ export default function ChatPage() {
           type="button"
           aria-label="Kembali ke kontak"
           onClick={() => setRemoteJid('')}
-          className="pressable rounded-control p-2 hover:bg-muted md:hidden"
+          className="pressable inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2 hover:bg-muted md:hidden"
         >
           <ArrowLeft size={18} />
         </button>

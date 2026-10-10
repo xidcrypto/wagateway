@@ -107,6 +107,10 @@
 html,
 body {
   height: 100%;
+  /* Kunci scroll horizontal di semua halaman (landing + dashboard) —
+     konten yang memang butuh geser (pre, tab, tabel) memakai overflow-x di
+     elemennya sendiri, bukan di body. */
+  overflow-x: clip;
 }
 
 body {
@@ -114,7 +118,6 @@ body {
   color: var(--foreground);
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
 .font-display {

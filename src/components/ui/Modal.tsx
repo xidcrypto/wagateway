@@ -33,7 +33,7 @@ export function Modal({
               <button
                 type="button"
                 aria-label="Tutup"
-                className="rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="pressable inline-flex min-h-10 min-w-10 items-center justify-center rounded-control p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X size={18} />
               </button>

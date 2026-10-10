@@ -330,7 +330,7 @@ export function LandingPage() {
 
         {/* Contoh API */}
         <section id="api" className="scroll-mt-20 border-b border-border">
-          <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-2 md:items-center">
+          <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:items-center">
             <Reveal>
               <p className="text-sm font-semibold text-muted-foreground">Untuk developer</p>
               <h2 className="font-display mt-1 text-3xl font-bold tracking-tight">
@@ -351,21 +351,23 @@ export function LandingPage() {
                 Buka API Docs
               </Link>
             </Reveal>
-            <Reveal delayMs={100}>
+            <Reveal delayMs={100} className="min-w-0">
               <div className="rounded-panel border border-border bg-card p-4 shadow-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="font-mono text-xs font-bold text-muted-foreground">POST /send/text</p>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 break-all font-mono text-xs font-bold text-muted-foreground">
+                    POST /api/sessions/:id/send/text
+                  </p>
                   <button
                     type="button"
                     onClick={() => void copySnippet()}
                     aria-label="Salin contoh curl"
-                    className="pressable inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="pressable inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                     {copied ? 'Tersalin' : 'Salin'}
                   </button>
                 </div>
-                <pre className="tnum overflow-x-auto rounded-control bg-background p-3 font-mono text-xs leading-6">
+                <pre className="tnum overflow-x-auto whitespace-pre-wrap break-all rounded-control bg-background p-3 font-mono text-xs leading-6">
                   {snippet}
                 </pre>
               </div>

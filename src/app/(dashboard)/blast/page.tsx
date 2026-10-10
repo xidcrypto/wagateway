@@ -34,7 +34,6 @@ import {
   type BlastDetail,
   type BlastItem,
   type BlastMediaInput,
-  type SendButton,
   type SessionItem,
 } from '@/lib/client/api';
 
@@ -294,16 +293,16 @@ function BlastDetailView({
               />
             </div>
             <div className="tnum mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-control bg-background px-2 py-2">
-                <p className="font-display text-xl font-bold text-status-connecting">{stats.pending}</p>
+              <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                <p className="font-display text-lg font-bold text-status-connecting sm:text-xl">{stats.pending}</p>
                 <p className="text-xs text-muted-foreground">Pending</p>
               </div>
-              <div className="rounded-control bg-background px-2 py-2">
-                <p className="font-display text-xl font-bold text-status-open">{stats.sent}</p>
+              <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                <p className="font-display text-lg font-bold text-status-open sm:text-xl">{stats.sent}</p>
                 <p className="text-xs text-muted-foreground">Terkirim</p>
               </div>
-              <div className="rounded-control bg-background px-2 py-2">
-                <p className="font-display text-xl font-bold text-status-failed">{stats.failed}</p>
+              <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                <p className="font-display text-lg font-bold text-status-failed sm:text-xl">{stats.failed}</p>
                 <p className="text-xs text-muted-foreground">Gagal</p>
               </div>
             </div>
@@ -397,8 +396,15 @@ export default function BlastPage() {
   const [mediaSrc, setMediaSrc] = useState('');
   const [useButtons, setUseButtons] = useState(false);
   const [buttonsMode, setButtonsMode] = useState<'buttons' | 'buttonv2' | 'list'>('buttons');
-  const [buttonsRaw, setButtonsRaw] = useState('');
-  const [listRaw, setListRaw] = useState('');
+  // Template tombol tanpa JSON: user tinggal isi field.
+  const [buttonRows, setButtonRows] = useState<
+    Array<{ kind: 'reply' | 'url' | 'copy' | 'call'; text: string; value: string }>
+  >([{ kind: 'reply', text: '', value: '' }]);
+  const [quickRows, setQuickRows] = useState<Array<{ text: string }>>([{ text: '' }]);
+  const [listSections, setListSections] = useState<
+    Array<{ title: string; rows: Array<{ title: string; description: string }> }>
+  >([{ title: '', rows: [{ title: '', description: '' }] }]);
+  const [buttonsFooter, setButtonsFooter] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -485,48 +491,51 @@ export default function BlastPage() {
     return true;
   }
 
+  /** Template daftar tombol → payload buttons (tanpa JSON, id reply otomatis). */
   function parseBlastButtons(): BlastButtonsInput | null {
     if (!useButtons) return null;
+    const footer = buttonsFooter.trim() ? buttonsFooter.trim() : undefined;
     if (buttonsMode === 'list') {
-      const sections: BlastButtonsInput extends never ? never : Array<{ title?: string; rows: Array<{ title: string }> }> = [];
-      for (const line of listRaw.split('\n')) {
-        const t = line.trim();
-        if (!t) continue;
-        const [titlePart, ...rest] = t.split('|');
-        const rows = rest
-          .join('|')
-          .split(';')
-          .map((r) => r.trim())
-          .filter(Boolean)
-          .map((title) => ({ title }));
-        if (rows.length === 0) throw new Error(`Baris "${t}" tidak punya baris (pakai pemisah ";" ).`);
-        sections.push({ title: (titlePart ?? '').trim(), rows });
-      }
-      if (sections.length === 0) throw new Error('Isi minimal 1 section untuk list.');
-      return { mode: 'list', sections };
+      const sections = listSections
+        .map((s, si) => ({
+          title: s.title.trim() || `Pilihan ${si + 1}`,
+          rows: s.rows
+            .map((r) => ({
+              title: r.title.trim(),
+              ...(r.description.trim() ? { description: r.description.trim() } : {}),
+            }))
+            .filter((r) => r.title.length > 0),
+        }))
+        .filter((s) => s.rows.length > 0);
+      if (sections.length === 0) throw new Error('Isi minimal 1 section dengan 1 baris.');
+      return { mode: 'list', sections, ...(footer ? { footer } : {}) };
     }
-    let arr: unknown;
-    try {
-      arr = JSON.parse(buttonsRaw.trim() || '[]');
-    } catch {
-      throw new Error('JSON tombol tidak valid.');
-    }
-    if (!Array.isArray(arr) || arr.length === 0) throw new Error('Isi minimal 1 tombol (JSON array).');
     if (buttonsMode === 'buttonv2') {
-      if (arr.length > 3) throw new Error('Balas cepat maksimal 3 tombol.');
-      const btns = (arr as Array<{ id?: unknown; text?: unknown }>).map((b) => {
-        if (typeof b?.id !== 'string' || !b.id.trim()) throw new Error('Tiap tombol butuh id.');
-        if (typeof b?.text !== 'string' || !b.text.trim()) throw new Error('Tiap tombol butuh text.');
-        return { id: b.id.trim(), text: b.text.trim() };
-      });
-      return { mode: 'buttonv2', buttons: btns };
+      const filled = quickRows.map((r) => r.text.trim()).filter(Boolean);
+      if (filled.length === 0) throw new Error('Isi minimal 1 tombol balas cepat.');
+      if (filled.length > 3) throw new Error('Balas cepat maksimal 3 tombol.');
+      const buttons = filled.map((text, i) => ({ id: `btn-${i + 1}`, text }));
+      return { mode: 'buttonv2', buttons, ...(footer ? { footer } : {}) };
     }
-    if (arr.length > 10) throw new Error('Maksimal 10 tombol.');
-    const btns = (arr as SendButton[]).map((b) => {
-      if (typeof b?.text !== 'string' || !b.text.trim()) throw new Error('Tiap tombol butuh text.');
-      return b;
+    const filled = buttonRows
+      .map((r) => ({ kind: r.kind, text: r.text.trim(), value: r.value.trim() }))
+      .filter((r) => r.text.length > 0);
+    if (filled.length === 0) throw new Error('Isi minimal 1 tombol.');
+    if (filled.length > 10) throw new Error('Maksimal 10 tombol.');
+    const buttons = filled.map((r, i) => {
+      if (r.kind === 'reply') return { type: 'reply' as const, id: `btn-${i + 1}`, text: r.text };
+      if (r.kind === 'url') {
+        if (!r.value) throw new Error(`Tombol ${i + 1}: isi URL tujuan (https).`);
+        return { type: 'url' as const, text: r.text, url: r.value };
+      }
+      if (r.kind === 'copy') {
+        if (!r.value) throw new Error(`Tombol ${i + 1}: isi teks yang disalin.`);
+        return { type: 'copy' as const, text: r.text, copy: r.value };
+      }
+      if (!r.value) throw new Error(`Tombol ${i + 1}: isi nomor tujuan (format 62812…).`);
+      return { type: 'call' as const, text: r.text, call: r.value };
     });
-    return { mode: 'buttons', buttons: btns };
+    return { mode: 'buttons', buttons, ...(footer ? { footer } : {}) };
   }
 
   function buildMedia(): BlastMediaInput | null {
@@ -593,8 +602,11 @@ export default function BlastPage() {
       setUseMedia(false);
       setMediaSrc('');
       setUseButtons(false);
-      setButtonsRaw('');
-      setListRaw('');
+      setButtonsMode('buttons');
+      setButtonRows([{ kind: 'reply', text: '', value: '' }]);
+      setQuickRows([{ text: '' }]);
+      setListSections([{ title: '', rows: [{ title: '', description: '' }] }]);
+      setButtonsFooter('');
       setStep('pesan');
       setShowCreate(false);
       await loadBlasts(sessionId);
@@ -803,25 +815,260 @@ export default function BlastPage() {
                       value={buttonsMode}
                       onChange={(e) => setButtonsMode(e.target.value as typeof buttonsMode)}
                     >
-                      <option value="buttons">Tombol (reply/url/copy/call, maks 10)</option>
-                      <option value="buttonv2">Balas cepat (reply saja, maks 3)</option>
-                      <option value="list">List (sections + rows)</option>
+                      <option value="buttons">Tombol (maks 10)</option>
+                      <option value="buttonv2">Balas cepat (maks 3)</option>
+                      <option value="list">List pilihan</option>
                     </Select>
+                    {buttonsMode === 'buttons' ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Isi teks tombol + tujuan tiap baris. ID reply dibuat otomatis.
+                        </p>
+                        {buttonRows.map((row, i) => (
+                          <div key={i} className="flex flex-col gap-2 rounded-control border border-border p-2">
+                            <div className="flex gap-2">
+                              <div className="min-w-0 flex-1">
+                                <Select
+                                  aria-label={`Jenis tombol ${i + 1}`}
+                                  value={row.kind}
+                                  onChange={(e) => {
+                                    const next = [...buttonRows];
+                                    next[i] = { ...row, kind: e.target.value as typeof row.kind };
+                                    setButtonRows(next);
+                                  }}
+                                >
+                                  <option value="reply">Balas</option>
+                                  <option value="url">Link</option>
+                                  <option value="copy">Salin</option>
+                                  <option value="call">Telepon</option>
+                                </Select>
+                              </div>
+                              <div className="min-w-0 flex-[2]">
+                                <TextInput
+                                  aria-label={`Teks tombol ${i + 1}`}
+                                  value={row.text}
+                                  onChange={(e) => {
+                                    const next = [...buttonRows];
+                                    next[i] = { ...row, text: e.target.value };
+                                    setButtonRows(next);
+                                  }}
+                                  maxLength={30}
+                                  placeholder="Teks tombol (maks 30)"
+                                />
+                              </div>
+                            </div>
+                            {row.kind === 'reply' ? null : (
+                              <TextInput
+                                aria-label={`Tujuan tombol ${i + 1}`}
+                                value={row.value}
+                                onChange={(e) => {
+                                  const next = [...buttonRows];
+                                  next[i] = { ...row, value: e.target.value };
+                                  setButtonRows(next);
+                                }}
+                                placeholder={
+                                  row.kind === 'url'
+                                    ? 'https://tokomu.id/promo'
+                                    : row.kind === 'copy'
+                                      ? 'Teks yang disalin (mis. KODEPROMO)'
+                                      : 'Nomor tujuan (62812…)'
+                                }
+                              />
+                            )}
+                            {buttonRows.length > 1 ? (
+                              <div className="flex justify-end">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => setButtonRows(buttonRows.filter((_, j) => j !== i))}
+                                >
+                                  Hapus
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                        {buttonRows.length < 10 ? (
+                          <div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setButtonRows([...buttonRows, { kind: 'reply', text: '', value: '' }])}
+                            >
+                              <Plus size={14} /> Tambah tombol
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {buttonsMode === 'buttonv2' ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Teks balasan cepat (maks 3). ID dibuat otomatis.
+                        </p>
+                        {quickRows.map((row, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <TextInput
+                                aria-label={`Balasan cepat ${i + 1}`}
+                                value={row.text}
+                                onChange={(e) => {
+                                  const next = [...quickRows];
+                                  next[i] = { text: e.target.value };
+                                  setQuickRows(next);
+                                }}
+                                maxLength={30}
+                                placeholder={`Pilihan ${i + 1} (mis. Ya / Tidak)`}
+                              />
+                            </div>
+                            {quickRows.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setQuickRows(quickRows.filter((_, j) => j !== i))}
+                              >
+                                Hapus
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                        {quickRows.length < 3 ? (
+                          <div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setQuickRows([...quickRows, { text: '' }])}
+                            >
+                              <Plus size={14} /> Tambah pilihan
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {buttonsMode === 'list' ? (
-                      <TextArea
-                        label="Section (satu section per baris: Judul | baris 1 ; baris 2)"
-                        value={listRaw}
-                        onChange={(e) => setListRaw(e.target.value)}
-                        placeholder={'Menu | Nasi goreng ; Mie goreng'}
-                      />
-                    ) : (
-                      <TextArea
-                        label={buttonsMode === 'buttonv2' ? 'Tombol (JSON: [{"id":"…","text":"…"}])' : 'Tombol (JSON array, tiap item: text + id/url/copy/call)'}
-                        value={buttonsRaw}
-                        onChange={(e) => setButtonsRaw(e.target.value)}
-                        placeholder={buttonsMode === 'buttonv2' ? '[{"id":"ya","text":"Ya"}]' : '[{"type":"reply","id":"beli","text":"Beli"}]'}
-                      />
-                    )}
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Kelompokkan pilihan ke dalam section, tiap baris bisa punya keterangan.
+                        </p>
+                        {listSections.map((sec, si) => (
+                          <div key={si} className="flex flex-col gap-2 rounded-control border border-border p-2">
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <TextInput
+                                  aria-label={`Judul section ${si + 1}`}
+                                  value={sec.title}
+                                  onChange={(e) => {
+                                    const next = [...listSections];
+                                    next[si] = { ...sec, title: e.target.value };
+                                    setListSections(next);
+                                  }}
+                                  maxLength={60}
+                                  placeholder={`Section ${si + 1} (mis. Menu)`}
+                                />
+                              </div>
+                              {listSections.length > 1 ? (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => setListSections(listSections.filter((_, j) => j !== si))}
+                                >
+                                  Hapus
+                                </Button>
+                              ) : null}
+                            </div>
+                            {sec.rows.map((row, ri) => (
+                              <div key={ri} className="flex items-center gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <TextInput
+                                    aria-label={`Baris ${ri + 1} section ${si + 1}`}
+                                    value={row.title}
+                                    onChange={(e) => {
+                                      const next = [...listSections];
+                                      const rows = [...next[si].rows];
+                                      rows[ri] = { ...row, title: e.target.value };
+                                      next[si] = { ...next[si], rows };
+                                      setListSections(next);
+                                    }}
+                                    maxLength={60}
+                                    placeholder={`Baris ${ri + 1} (mis. Nasi goreng)`}
+                                  />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <TextInput
+                                    aria-label={`Keterangan baris ${ri + 1} section ${si + 1}`}
+                                    value={row.description}
+                                    onChange={(e) => {
+                                      const next = [...listSections];
+                                      const rows = [...next[si].rows];
+                                      rows[ri] = { ...row, description: e.target.value };
+                                      next[si] = { ...next[si], rows };
+                                      setListSections(next);
+                                    }}
+                                    maxLength={300}
+                                    placeholder="Keterangan (opsional)"
+                                  />
+                                </div>
+                                {sec.rows.length > 1 ? (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    aria-label={`Hapus baris ${ri + 1} section ${si + 1}`}
+                                    onClick={() => {
+                                      const next = [...listSections];
+                                      next[si] = { ...next[si], rows: next[si].rows.filter((_, j) => j !== ri) };
+                                      setListSections(next);
+                                    }}
+                                  >
+                                    ✕
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ))}
+                            {sec.rows.length < 10 ? (
+                              <div>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    const next = [...listSections];
+                                    next[si] = { ...next[si], rows: [...next[si].rows, { title: '', description: '' }] };
+                                    setListSections(next);
+                                  }}
+                                >
+                                  <Plus size={14} /> Tambah baris
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                        {listSections.length < 10 ? (
+                          <div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setListSections([...listSections, { title: '', rows: [{ title: '', description: '' }] }])}
+                            >
+                              <Plus size={14} /> Tambah section
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <TextInput
+                      label="Catatan kaki tombol (opsional)"
+                      value={buttonsFooter}
+                      onChange={(e) => setButtonsFooter(e.target.value)}
+                      maxLength={1024}
+                      placeholder="mis. Berlaku s.d. akhir bulan"
+                    />
                   </div>
                 ) : null}
                 <div className="flex justify-end">
@@ -843,18 +1090,18 @@ export default function BlastPage() {
                   placeholder={'628121111111\n628122222222, 628123333333'}
                 />
                 <div className="tnum grid grid-cols-3 gap-2 text-center" aria-live="polite">
-                  <div className="rounded-control bg-background px-2 py-2">
-                    <p className="font-display flex items-center justify-center gap-1 text-xl font-bold text-status-open">
+                  <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                    <p className="font-display flex items-center justify-center gap-1 text-lg font-bold text-status-open sm:text-xl">
                       <Check size={15} /> {summary.valid}
                     </p>
                     <p className="text-xs text-muted-foreground">Valid</p>
                   </div>
-                  <div className="rounded-control bg-background px-2 py-2">
-                    <p className="font-display text-xl font-bold text-status-connecting">{summary.duplicates}</p>
+                  <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                    <p className="font-display text-lg font-bold text-status-connecting sm:text-xl">{summary.duplicates}</p>
                     <p className="text-xs text-muted-foreground">Duplikat</p>
                   </div>
-                  <div className="rounded-control bg-background px-2 py-2">
-                    <p className="font-display text-xl font-bold text-status-failed">{summary.invalid}</p>
+                  <div className="rounded-control bg-background px-1 py-2 sm:px-2">
+                    <p className="font-display text-lg font-bold text-status-failed sm:text-xl">{summary.invalid}</p>
                     <p className="text-xs text-muted-foreground">Tidak valid</p>
                   </div>
                 </div>

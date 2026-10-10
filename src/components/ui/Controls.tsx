@@ -86,7 +86,7 @@ export function TabList({
           <Tabs.Trigger
             key={t.value}
             value={t.value}
-            className="pressable min-h-9 flex-1 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium text-muted-foreground transition hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground"
+            className="pressable min-h-10 flex-1 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium text-muted-foreground transition hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground"
           >
             {t.label}
           </Tabs.Trigger>
