@@ -92,7 +92,7 @@ function SidebarBody({
   onLogout: () => void;
 }) {
   const items = NAV;
-  const adminItems = ADMIN_NAV.filter((n) => user?.role === 'admin');
+  const adminItems = ADMIN_NAV.filter(() => user?.role === 'admin');
   // Item admin aktif bila path persis atau di bawahnya (kecuali /admin yang exact).
   function navActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin';
