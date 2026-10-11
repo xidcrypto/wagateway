@@ -62,7 +62,10 @@ model User {
   active         Boolean         @default(true)
   webhookUrl    String?  @map("webhook_url") @db.Text
   webhookSecret String?  @map("webhook_secret")
-  apiKey        String?  @unique @map("api_key") @db.VarChar(64)
+  // Hash sha256 dari API key + hint 4 char (plaintext tak pernah disimpan).
+  apiKeyHash    String?  @unique @map("api_key_hash") @db.VarChar(64)
+  // 4 char terakhir untuk petunjuk tampilan (tanpa membocorkan key).
+  apiKeyHint    String?  @map("api_key_hint") @db.VarChar(8)
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   sessions       Session[]

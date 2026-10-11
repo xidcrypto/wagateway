@@ -374,6 +374,21 @@ body {
   }
 }
 
+/* Bubble pesan tiket baru: masuk halus (transform + opacity saja). */
+.msg-in {
+  animation: msg-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Hormati reduced-motion: matikan dekoratif. */
 @media (prefers-reduced-motion: reduce) {
   .notif-pop,
@@ -383,7 +398,8 @@ body {
     transform: none;
   }
   .notif-badge,
-  .notif-dot {
+  .notif-dot,
+  .msg-in {
     animation: none;
   }
   .orb-open::before,
@@ -431,7 +447,8 @@ html.reduce-motion .page-enter,
 html.reduce-motion .notif-pop,
 html.reduce-motion .notif-item,
 html.reduce-motion .notif-badge,
-html.reduce-motion .notif-dot {
+html.reduce-motion .notif-dot,
+html.reduce-motion .msg-in {
   animation: none;
 }
 html.reduce-motion .typing-dots span[aria-hidden] {

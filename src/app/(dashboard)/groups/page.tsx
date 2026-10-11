@@ -412,7 +412,7 @@ export default function GroupsPage() {
       setGroups(r.groups);
     } catch (e) {
       toast('error', errMsg(e, 'Gagal memuat grup. Session mungkin belum open.'));
-      setGroups([]);
+      // Pertahankan daftar lama; error transien tidak boleh menghapus data valid.
     } finally {
       setLoading(false);
     }
@@ -428,7 +428,7 @@ export default function GroupsPage() {
       .catch((e) => {
         if (!cancelled) {
           toast('error', errMsg(e, 'Gagal memuat grup. Session mungkin belum open.'));
-          setGroups([]);
+          // Pertahankan daftar lama.
         }
       })
       .finally(() => {

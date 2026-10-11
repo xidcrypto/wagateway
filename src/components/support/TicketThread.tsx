@@ -53,17 +53,29 @@ export function TicketThread({
   const [stickBottom, setStickBottom] = useState(true);
   const [hasNew, setHasNew] = useState(false);
   const prevCount = useRef(messages.length);
+  // ID pesan yang sudah pernah dirender — yang lebih baru dapat efek masuk.
+  // Diisi di effect (bukan saat render) agar aman StrictMode.
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => new Set(messages.map((m) => m.id)));
+  const [freshId, setFreshId] = useState<string | null>(null);
 
   // Auto-scroll cerdas: ikut ke bawah hanya bila user sedang di dasar.
   // Deteksi pesan baru via ref (bukan setState sinkron di body effect).
+  // Pesan yang benar-benar baru ditandai freshId → efek masuk sekali.
   useEffect(() => {
     if (messages.length > prevCount.current && !stickBottom) {
       setHasNew(true);
+    }
+    const last = messages[messages.length - 1];
+    if (last && !seenIds.has(last.id) && messages.length > prevCount.current) {
+      setFreshId(last.id);
+      setSeenIds((prev) => new Set(prev).add(last.id));
     }
     prevCount.current = messages.length;
     if (stickBottom) {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
     }
+    // seenIds dibaca sebagai snapshot; update via setSeenIds di atas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, peerTyping, stickBottom]);
 
   function onScroll(): void {
@@ -108,8 +120,13 @@ export function TicketThread({
           const senderLabel = m.fromAdmin
             ? 'CS'
             : (m.sender?.fullName || m.sender?.username || (isAdminView ? 'User' : 'Kamu'));
+          // Efek masuk hanya untuk pesan terbaru yang baru tiba via SSE.
+          const isNew = freshId !== null && m.id === freshId;
           return (
-            <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+            <div
+              key={m.id}
+              className={cn('flex', mine ? 'justify-end' : 'justify-start', isNew && 'msg-in')}
+            >
               <div
                 className={cn(
                   'max-w-[85%] rounded-card border px-3.5 py-2.5',

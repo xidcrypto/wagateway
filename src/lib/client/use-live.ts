@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { getToken } from './api';
+import { getToken, issueSseToken } from './api';
 
 /**
  * SSE live + fallback polling (pengganti polling rutin).
@@ -14,6 +14,10 @@ import { getToken } from './api';
  *   fallbackMs: 8000,              // bila SSE mati > ini, anggap down
  *   pollMs: 5000,                 // interval fallback saat SSE down
  *   onPoll: () => { ... },        // dipanggil tiap pollMs saat SSE down
+ *   sseOnly: false,               // true = SSE MURNI: watchdog tidak pernah
+ *                                 // memanggil onPoll (tidak ada request
+ *                                 // berulang); hanya update `connected` +
+ *                                 // reconnect otomatis EventSource.
  *   enabled: true,
  * });
  * // live.connected: true bila SSE tersambung (sembunyikan polling manual)
@@ -21,6 +25,8 @@ import { getToken } from './api';
  * ```
  *
  * - EventSource ke /api/events/stream?token= (browser tak bisa set header).
+ *   Token di URL adalah token SSE ber-TTL ±60 dtk (POST /api/events/token),
+ *   BUKAN JWT login 7-hari — jendela bocor ke log/proxy/history jadi kecil.
  * - Auto-reconnect bawaan EventSource (retry tiap ~3 dtk bila putus).
  * - Heartbeat server tiap 25 dtk; watchdog client: bila tidak ada pesan
  *   (termasuk ping) selama fallbackMs → connected=false → pemanggil jalanin
@@ -94,9 +100,10 @@ export function useLiveEvents(opts: {
   onPoll?: () => void;
   fallbackMs?: number;
   pollMs?: number;
+  sseOnly?: boolean;
   enabled?: boolean;
 }): { connected: boolean; reconnect: () => void } {
-  const { onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll, fallbackMs = 8000, pollMs = 5000, enabled = true } = opts;
+  const { onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll, fallbackMs = 8000, pollMs = 5000, sseOnly = false, enabled = true } = opts;
   const [connected, setConnected] = useState(false);
   const [seq, setSeq] = useState(0);
   const cbRef = useRef({ onSession, onBlast, onNotification, onTicketTyping, onTicketPresence, onTicketMessage, onPoll });
@@ -131,8 +138,32 @@ export function useLiveEvents(opts: {
       } catch {
         // Abaikan.
       }
-      const tokenParam = token ?? '';
-      const source = new EventSource(`/api/events/stream?token=${encodeURIComponent(tokenParam)}`);
+      // Tukar JWT → token SSE TTL pendek dulu (async); JWT tak pernah ke URL.
+      void (async () => {
+        if (stopped) return;
+        let sseToken = '';
+        try {
+          const r = await issueSseToken();
+          if (stopped) return;
+          sseToken = r.token;
+        } catch {
+          // Gagal terbitkan (mis. offline sesaat): biarkan watchdog menandai
+          // down; EventSource retry berikutnya mencoba lagi.
+          return;
+        }
+        if (stopped) return;
+        openSource(sseToken);
+      })();
+    }
+
+    function openSource(sseToken: string): void {
+      if (stopped) return;
+      try {
+        es?.close();
+      } catch {
+        // Abaikan.
+      }
+      const source = new EventSource(`/api/events/stream?token=${encodeURIComponent(sseToken)}`);
       es = source;
       source.addEventListener('ready', () => markAlive());
       source.addEventListener('session', (e) => {
@@ -199,20 +230,27 @@ export function useLiveEvents(opts: {
     connect();
     document.addEventListener('visibilitychange', onVis);
 
-    // Watchdog: SSE dianggap down bila sunyi > fallbackMs → fallback polling.
+    // Watchdog: SSE dianggap down bila sunyi > fallbackMs.
+    // Mode sseOnly: TIDAK pernah memanggil onPoll (nol request berulang);
+    // hanya tandai disconnected + coba sambung ulang bila tertutup.
+    // EventSource sendiri retry otomatis; reconnect manual via `reconnect()`.
     const watch = window.setInterval(() => {
       if (stopped) return;
       if (document.visibilityState !== 'visible') return;
       const silent = Date.now() - lastMsg;
       if (silent > fallbackMs) {
         setAlive(false);
+        if (sseOnly) {
+          if (!es || es.readyState === EventSource.CLOSED) connect();
+          return;
+        }
         try {
           cbRef.current.onPoll?.();
         } catch {
           // Abaikan.
         }
       }
-    }, pollMs);
+    }, sseOnly ? fallbackMs : pollMs);
 
     return () => {
       stopped = true;
@@ -226,7 +264,7 @@ export function useLiveEvents(opts: {
       setAlive(false);
     };
     // seq: pemicu reconnect manual. Sengaja tidak depend on callback.
-  }, [enabled, seq, fallbackMs, pollMs]);
+  }, [enabled, seq, fallbackMs, pollMs, sseOnly]);
 
   return { connected, reconnect: () => setSeq((s) => s + 1) };
 }

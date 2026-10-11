@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { generateUserApiKey, requireAdmin, toPublicUser, withAuth } from '@/lib/server/auth';
+import { apiKeyHint, generateUserApiKey, hashUserApiKey, requireAdmin, toPublicUser, withAuth } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
 import {
@@ -49,6 +49,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
   const passwordHash = await bcrypt.hash(body.password, 10);
   try {
+    const apiKey = generateUserApiKey();
     const created = await prisma.user.create({
       data: {
         username: body.username.trim(),
@@ -57,12 +58,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         passwordHash,
         phone: body.phone === null || body.phone === '' ? null : body.phone?.trim() ?? null,
         avatarUrl: body.avatarUrl ?? body.avatar_url ?? null,
-        apiKey: generateUserApiKey(),
+        apiKeyHash: hashUserApiKey(apiKey),
+        apiKeyHint: apiKeyHint(apiKey),
         role: body.role ?? 'user',
         active: body.active ?? true,
       },
     });
-    return ok({ user: toPublicUser(created), apiKey: created.apiKey }, 201);
+    return ok({ user: toPublicUser(created), apiKey }, 201);
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002') {
       return fail('Username atau email sudah dipakai.', 409);

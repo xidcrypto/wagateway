@@ -73,12 +73,23 @@ export function generateUserApiKey(): string {
   return `pn-${crypto.randomBytes(16).toString('hex')}`;
 }
 
+/** sha256 hex dari API key (yang disimpan di DB; plaintext tak pernah disimpan). */
+export function hashUserApiKey(raw: string): string {
+  return crypto.createHash('sha256').update(raw, 'utf8').digest('hex');
+}
+
+/** 4 char terakhir untuk petunjuk tampilan. */
+export function apiKeyHint(raw: string): string {
+  return raw.slice(-4);
+}
+
 async function loadUserByApiKey(raw: string): Promise<AuthUser | null> {
   if (!raw.startsWith('pn-')) return null;
-  // Cari kandidat lalu bandingkan timing-safe (kolom unik, tetap aman).
-  const user = await prisma.user.findUnique({ where: { apiKey: raw } });
-  if (!user || !user.active || !user.apiKey) return null;
-  if (!timingSafeEqualStr(raw, user.apiKey)) return null;
+  // Cari via hash (kolom unik), lalu bandingkan timing-safe.
+  const hash = hashUserApiKey(raw);
+  const user = await prisma.user.findUnique({ where: { apiKeyHash: hash } });
+  if (!user || !user.active || !user.apiKeyHash) return null;
+  if (!timingSafeEqualStr(hash, user.apiKeyHash)) return null;
   return {
     id: user.id,
     username: user.username,
@@ -98,6 +109,11 @@ async function loadUserById(id: number): Promise<AuthUser | null> {
     role: user.role,
     active: user.active,
   };
+}
+
+/** Versi publik loadUserById (untuk stream SSE via token khusus). */
+export async function loadUserByIdSafe(id: number): Promise<AuthUser | null> {
+  return loadUserById(id);
 }
 
 /** Ambil identitas dari Bearer JWT, x-api-key master, atau x-api-key per user (`pn-…`). */
@@ -145,7 +161,7 @@ export type PublicUser = {
   updatedAt: Date;
 };
 
-/** User aman untuk respons API: tanpa passwordHash, webhookSecret, dan apiKey mentah. */
+/** User aman untuk respons API: tanpa passwordHash, webhookSecret, dan API key. */
 export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
@@ -157,7 +173,7 @@ export function toPublicUser(user: User): PublicUser {
     role: user.role,
     active: user.active,
     webhookUrl: user.webhookUrl,
-    hasApiKey: Boolean(user.apiKey),
+    hasApiKey: Boolean(user.apiKeyHash),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

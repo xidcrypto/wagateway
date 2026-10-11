@@ -4,7 +4,6 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
-
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -30,13 +29,15 @@ async function main(): Promise<void> {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const seedApiKey = `pn-${crypto.randomBytes(16).toString('hex')}`;
     const admin = await prisma.user.create({
       data: {
         username,
         email,
         fullName,
         passwordHash,
-        apiKey: `pn-${crypto.randomBytes(16).toString('hex')}`,
+        apiKeyHash: crypto.createHash('sha256').update(seedApiKey, 'utf8').digest('hex'),
+        apiKeyHint: seedApiKey.slice(-4),
         role: 'admin',
         active: true,
       },

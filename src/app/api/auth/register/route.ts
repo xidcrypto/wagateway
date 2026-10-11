@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { createToken, generateUserApiKey, toPublicUser } from '@/lib/server/auth';
+import { createToken, generateUserApiKey, hashUserApiKey, apiKeyHint, toPublicUser } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { fail, handlePreflight, ok } from '@/lib/server/response';
 import { isRegistrationEnabled } from '@/lib/server/settings';
@@ -50,7 +50,8 @@ async function handleRegister(req: NextRequest): Promise<Response> {
         fullName,
         passwordHash,
         phone: body.phone === null || body.phone === '' ? null : body.phone?.trim() ?? null,
-        apiKey,
+        apiKeyHash: hashUserApiKey(apiKey),
+        apiKeyHint: apiKeyHint(apiKey),
         // Pendaftar publik selalu role user dan aktif.
         role: 'user',
         active: true,

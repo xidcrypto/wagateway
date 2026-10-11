@@ -41,6 +41,12 @@ function errMsg(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
 }
 
+/** Teks error blast tanpa prefix "Galat:" ganda (data lama bisa menyimpannya). */
+function blastErrorText(raw: string | null): string | null {
+  if (!raw) return null;
+  return raw.replace(/^(galat|error|eror)\s*:\s*/i, '');
+}
+
 /** Normalisasi nomor versi pratinjau (server tetap otoritatif saat create). */
 function normalizePreview(raw: string): string | null {
   const digits = raw.replace(/\D/g, '');
@@ -344,7 +350,7 @@ function BlastDetailView({
             </p>
             <p className="tnum mt-2 text-xs text-muted-foreground">
               Komposisi: {compositionSummary(detail)} · Jeda {detail.delayMin}–{detail.delayMax} ms antar nomor
-              {detail.error ? ` · Galat: ${detail.error}` : ''}
+              {blastErrorText(detail.error) ? ` · Galat: ${blastErrorText(detail.error)}` : ''}
             </p>
           </Card>
 
@@ -458,7 +464,8 @@ export default function BlastPage() {
       setBlasts(r.blasts);
       setListError(null);
     } catch (e) {
-      setBlasts([]);
+      // Pertahankan daftar lama; error transien tidak boleh menghapus data valid.
+      toast('error', errMsg(e, 'Gagal memuat blast.'));
       setListError(errMsg(e, 'Gagal memuat blast.'));
     } finally {
       setLoading(false);
@@ -477,7 +484,8 @@ export default function BlastPage() {
       })
       .catch((e) => {
         if (cancelled) return;
-        setBlasts([]);
+        // Pertahankan daftar lama; tampilkan toast + blok error dengan retry.
+        toast('error', errMsg(e, 'Gagal memuat blast.'));
         setListError(errMsg(e, 'Gagal memuat blast.'));
         setLoading(false);
       });
@@ -707,7 +715,7 @@ export default function BlastPage() {
           <Skeleton className="h-14" />
           <Skeleton className="h-14" />
         </div>
-      ) : listError ? (
+      ) : listError && blasts.length === 0 ? (
         <ErrorState
           message="Gagal memuat daftar blast."
           hint={listError}
@@ -718,7 +726,26 @@ export default function BlastPage() {
             }
           }}
         />
-      ) : blasts.length === 0 ? (
+      ) : (
+        <>
+          {listError ? (
+            <p role="alert" className="rounded-control border border-status-failed/40 bg-status-failed/10 px-3 py-2 text-sm">
+              {listError}{' '}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => {
+                  if (sessionId) {
+                    setLoading(true);
+                    void loadBlasts(sessionId);
+                  }
+                }}
+              >
+                Coba lagi
+              </button>
+            </p>
+          ) : null}
+          {blasts.length === 0 ? (
         <EmptyState
           title="Belum ada campaign blast"
           hint="Buat campaign pertamamu: tulis pesan dengan variabel {{nama}} (opsional bila ada media/tombol), tempel daftar nomor, atur jeda antar nomor, lalu jalankan."
@@ -761,6 +788,8 @@ export default function BlastPage() {
             </li>
           ))}
         </ul>
+          )}
+        </>
       )}
 
       {showCreate ? (

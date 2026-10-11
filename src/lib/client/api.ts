@@ -108,6 +108,13 @@ export function login(identifier: string, password: string): Promise<LoginResult
   });
 }
 
+/** Token SSE ber-TTL pendek untuk ?token= EventSource (bukan JWT login). */
+export function issueSseToken(): Promise<{ token: string; expiresIn: number }> {
+  return api<{ token: string; expiresIn: number }>('/api/events/token', {
+    method: 'POST',
+  });
+}
+
 export type RegisterInput = {
   username: string;
   email: string;

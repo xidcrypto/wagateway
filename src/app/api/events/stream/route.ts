@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticate, isAdmin } from '@/lib/server/auth';
+import { authenticate, isAdmin, loadUserByIdSafe, type AuthContext } from '@/lib/server/auth';
 import { onLiveEvent } from '@/lib/server/live-bus';
 import { adminConnected, isAnyAdminOnline } from '@/lib/server/ticket-live';
+import { verifySseToken } from '@/lib/server/sse-token';
 import { prisma } from '@/lib/server/prisma';
 import type { SessionEvent } from '@/lib/server/session-manager';
 import { applyCors, applySecurityHeaders } from '@/lib/server/response';
@@ -11,31 +12,49 @@ export const dynamic = 'force-dynamic';
 
 /**
  * SSE live untuk dashboard (pengganti polling rutin).
- * - Autentikasi: Bearer JWT (header) ATAU ?token= (EventSource browser tidak
- *   bisa set header, jadi token dikirim via query — khusus JWT dashboard,
- *   API key tidak diterima di sini).
+ * - Autentikasi: Bearer JWT (header) ATAU ?token= token SSE ber-TTL pendek
+ *   (diterbitkan POST /api/events/token; EventSource browser tidak bisa
+ *   set header, jadi JWT login 7-hari DILARANG via query — hanya token SSE).
+ *   API key tidak diterima di sini.
  * - Filter owner: user biasa hanya menerima event session miliknya; admin
  *   menerima semua. Blast difilter via owner blast (session owner).
  * - Heartbeat komentar tiap 25 dtk agar proxy tidak menutup koneksi idle.
  * - Tanpa retry dari server; client (EventSource) reconnect otomatis.
  */
 export async function GET(req: NextRequest): Promise<Response> {
-  // EventSource tidak bisa set header → terima ?token= sebagai alternatif.
+  // EventSource tidak bisa set header → terima ?token= token SSE khusus.
   const url = new URL(req.url);
   const queryToken = url.searchParams.get('token');
-  let probe = req;
   if (queryToken && !req.headers.get('authorization')) {
-    probe = new NextRequest(req.url, {
-      headers: { ...Object.fromEntries(req.headers.entries()), authorization: `Bearer ${queryToken}` },
-    });
+    const userId = verifySseToken(queryToken);
+    if (userId === null) {
+      return new Response(JSON.stringify({ success: false, error: 'Token live tidak valid atau kedaluwarsa.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const user = await loadUserByIdSafe(userId);
+    if (!user) {
+      return new Response(JSON.stringify({ success: false, error: 'Belum login. Silakan login dulu.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return openStream(req, { kind: 'jwt', user });
   }
-  const ctx = await authenticate(probe);
+  const ctx = await authenticate(req);
   if (!ctx || ctx.kind !== 'jwt') {
     return new Response(JSON.stringify({ success: false, error: 'Belum login. Silakan login dulu.' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  return openStream(req, ctx);
+}
+
+type StreamCtx = Extract<AuthContext, { kind: 'jwt' }>;
+
+async function openStream(req: NextRequest, ctx: StreamCtx): Promise<Response> {
   const admin = isAdmin(ctx);
   const userId = ctx.user.id;
 

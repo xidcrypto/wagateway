@@ -86,7 +86,7 @@ export default function MessagesPage() {
         if (!cancelled) setContacts(r.conversations);
       })
       .catch(() => {
-        if (!cancelled) setContacts([]);
+        // Pertahankan daftar kontak lama; error transien tidak boleh menghapus data valid.
       });
     return () => {
       cancelled = true;

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Headset, Plus } from 'lucide-react';
+import { Headset, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
@@ -194,6 +194,7 @@ function CsContent() {
   }
 
   const live = useLiveEvents({
+    sseOnly: true,
     onNotification: (ev: LiveNotificationEvent) => {
       if (ev.data.kind !== 'ticket_reply') return;
       const m = ev.data.link?.match(/[?&]id=(\d+)/);
@@ -234,20 +235,34 @@ function CsContent() {
     onTicketPresence: (ev: LiveTicketPresenceEvent) => {
       setAdminOnline(ev.adminOnline);
     },
-    onPoll: () => {
-      // Fallback SSE down: refresh ringan (daftar + presence + thread).
-      void loadList();
-      getTicketPresence()
-        .then((r) => setAdminOnline(r.adminOnline))
-        .catch(() => {});
+  });
+
+  /** Muat ulang manual (tombol refresh): daftar + presence + thread aktif. */
+  const [refreshing, setRefreshing] = useState(false);
+  async function refreshAll(): Promise<void> {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadList();
+      try {
+        const r = await getTicketPresence();
+        setAdminOnline(r.adminOnline);
+      } catch {
+        // Abaikan; status SSE tetap jadi acuan.
+      }
       const tid = selectedRef.current;
       if (tid) {
-        getTicket(tid)
-          .then((r) => setDetail(r.ticket))
-          .catch(() => {});
+        try {
+          const d = await getTicket(tid);
+          setDetail(d.ticket);
+        } catch (e) {
+          toast('error', e instanceof ApiError ? e.message : 'Gagal memuat tiket.');
+        }
       }
-    },
-  });
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Bersihkan timer typing saat pindah tiket / unmount.
   useEffect(() => {
@@ -374,14 +389,38 @@ function CsContent() {
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6 text-muted-foreground">
             <span>Ada kendala atau pertanyaan? Buat tiket, CS kami akan membalas di sini.</span>
             <AdminOnlineDot online={adminOnline} />
-            {!live.connected ? (
-              <span className="text-[11px]">(mode polling)</span>
-            ) : null}
+            <span
+              role="status"
+              aria-label={live.connected ? 'Live tersambung' : 'Live terputus'}
+              className="inline-flex items-center gap-1.5 text-[11px]"
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  live.connected ? 'bg-status-open' : 'bg-status-failed',
+                )}
+              />
+              {live.connected ? 'Live' : 'Terputus — menyambung…'}
+            </span>
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowNew(true)}>
-          <Plus size={15} /> Tiket baru
-        </Button>
+        <span className="flex gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={refreshing}
+            onClick={() => void refreshAll()}
+            aria-label="Muat ulang tiket"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : undefined} />
+            {refreshing ? 'Memuat…' : 'Muat ulang'}
+          </Button>
+          <Button size="sm" onClick={() => setShowNew(true)}>
+            <Plus size={15} /> Tiket baru
+          </Button>
+        </span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -507,7 +546,7 @@ function CsContent() {
               required
             />
             <TextArea
-              label="Ceritakan kendalamu"
+              label="Ceritakan kendala kamu"
               value={firstMsg}
               onChange={(e) => setFirstMsg(e.target.value)}
               placeholder="Jelaskan sedetail mungkin: session mana, sejak kapan, pesan error apa…"

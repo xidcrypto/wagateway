@@ -66,7 +66,7 @@ export default function ContactsPage() {
         if (!cancelled) setBlocklist(r.blocklist);
       })
       .catch(() => {
-        if (!cancelled) setBlocklist([]);
+        // Pertahankan blocklist lama; error transien tidak boleh menghapus data valid.
       });
     return () => {
       cancelled = true;

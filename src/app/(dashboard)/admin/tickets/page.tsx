@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -78,6 +78,9 @@ function TicketsContent() {
   const typingTimer = useRef<number | null>(null);
   const typingSentAt = useRef(0);
   const selectedRef = useRef<number | null>(null);
+  // Nomor urut request daftar: hanya hasil terakhir yang boleh menulis
+  // data (cegah fetch lama dari SSE menimpa hasil filter baru).
+  const listSeq = useRef(0);
 
   // Sinkron ref di effect (bukan saat render) — dipakai callback SSE.
   useEffect(() => {
@@ -86,6 +89,7 @@ function TicketsContent() {
 
   const loadList = useCallback(
     async (offset: number, append: boolean) => {
+      const seq = (listSeq.current += 1);
       if (append) setLoadingMore(true);
       else {
         setLoading(true);
@@ -97,12 +101,15 @@ function TicketsContent() {
           limit: ADMIN_PAGE,
           offset,
         });
+        if (seq !== listSeq.current) return;
         setTotal(r.total);
         setTickets((prev) => (append ? [...prev, ...r.tickets] : r.tickets));
       } catch (e) {
+        if (seq !== listSeq.current) return;
         if (!append) setError(errMsg(e, 'Gagal memuat tiket.'));
         else toast('error', errMsg(e, 'Gagal memuat lagi.'));
       } finally {
+        if (seq !== listSeq.current) return;
         setLoading(false);
         setLoadingMore(false);
       }
@@ -110,24 +117,16 @@ function TicketsContent() {
     [statusFilter],
   );
 
+  /* eslint-disable react-hooks/set-state-in-effect -- fetch awal saat filter berubah (pola sah). */
   useEffect(() => {
-    let cancelled = false;
-    listAdminTickets({ status: statusFilter, limit: ADMIN_PAGE, offset: 0 })
-      .then((r) => {
-        if (cancelled) return;
-        setTotal(r.total);
-        setTickets(r.tickets);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(errMsg(e, 'Gagal memuat tiket.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void loadList(0, false);
+    // Batalkan hasil basi saat filter berubah: putaran terbaru menang.
+    // (mutasi ref di cleanup, bukan setState — aman, bukan render loop.)
     return () => {
-      cancelled = true;
+      listSeq.current += 1;
     };
-  }, [statusFilter]);
+  }, [statusFilter, loadList]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!selectedId) return;
@@ -163,8 +162,10 @@ function TicketsContent() {
     typingTimer.current = window.setTimeout(() => setPeerTyping(false), 5000);
   }
 
-  // Realtime: tiket baru / balasan user → daftar + thread tanpa refetch.
-  useLiveEvents({
+  // Realtime SSE MURNI: tiket baru / balasan user → daftar + thread tanpa refetch.
+  // Tanpa onPoll: nol request berulang. Refresh hanya via tombol manual.
+  const live = useLiveEvents({
+    sseOnly: true,
     onNotification: (ev: LiveNotificationEvent) => {
       if (ev.data.kind !== 'ticket_new') return;
       void loadList(0, false);
@@ -196,16 +197,28 @@ function TicketsContent() {
       if (ev.ticketId !== selectedRef.current || ev.fromAdmin) return;
       pokeTyping();
     },
-    onPoll: () => {
-      void loadList(0, false);
+  });
+
+  /** Muat ulang manual (tombol refresh): daftar + thread aktif. */
+  const [refreshing, setRefreshing] = useState(false);
+  async function refreshAll(): Promise<void> {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadList(0, false);
       const tid = selectedRef.current;
       if (tid) {
-        getAdminTicket(tid)
-          .then((r) => setDetail(r.ticket))
-          .catch(() => {});
+        try {
+          const r = await getAdminTicket(tid);
+          setDetail(r.ticket);
+        } catch {
+          // Abaikan; status SSE tetap jadi acuan.
+        }
       }
-    },
-  });
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Bersihkan timer typing saat unmount.
   useEffect(() => {
@@ -310,7 +323,38 @@ function TicketsContent() {
     <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {/* Daftar tiket */}
       <div className={cn('flex-col gap-3', showThread ? 'hidden lg:flex' : 'flex')}>
-        <Card title={`Tiket CS (${total})`}>
+        <Card
+          title={`Tiket CS (${total})`}
+          action={
+            <span className="flex items-center gap-2">
+              <span
+                role="status"
+                aria-label={live.connected ? 'Live tersambung' : 'Live terputus'}
+                className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    live.connected ? 'bg-status-open' : 'bg-status-failed',
+                  )}
+                />
+                {live.connected ? 'Live' : 'Terputus'}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={refreshing}
+                onClick={() => void refreshAll()}
+                aria-label="Muat ulang tiket"
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : undefined} />
+                {refreshing ? 'Memuat…' : 'Muat ulang'}
+              </Button>
+            </span>
+          }
+        >
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Select
               aria-label="Filter status"

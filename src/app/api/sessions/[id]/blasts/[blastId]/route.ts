@@ -57,11 +57,16 @@ export const GET = withAuth(async (_req: NextRequest, ctx, routeCtx?: BlastCtx) 
     if (!blast) {
       return fail('Blast tidak ditemukan.', 404);
     }
-    const [pending, sent, failed] = await Promise.all([
-      prisma.blastRecipient.count({ where: { blastId, status: 'pending' } }),
-      prisma.blastRecipient.count({ where: { blastId, status: 'sent' } }),
-      prisma.blastRecipient.count({ where: { blastId, status: 'failed' } }),
-    ]);
+    const grouped = await prisma.blastRecipient.groupBy({
+      by: ['status'],
+      where: { blastId },
+      _count: { status: true },
+    });
+    const counts: Record<string, number> = { pending: 0, sent: 0, failed: 0 };
+    for (const g of grouped) {
+      counts[g.status] = g._count.status;
+    }
+    const { pending, sent, failed } = counts as { pending: number; sent: number; failed: number };
     return ok({ blast, stats: { pending, sent, failed, total: blast.total } });
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'Gagal mengambil detail blast.', 500);
