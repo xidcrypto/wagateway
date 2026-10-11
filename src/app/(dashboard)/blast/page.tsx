@@ -418,6 +418,11 @@ export default function BlastPage() {
   const [label, setLabel] = useState('');
   const [text, setText] = useState('');
   const [recipients, setRecipients] = useState('');
+  // Sumber penerima: 'ketik' (textarea) atau 'file' (upload .txt/.csv).
+  const [recipientMode, setRecipientMode] = useState<'ketik' | 'file'>('ketik');
+  const [recipientFileName, setRecipientFileName] = useState<string | null>(null);
+  const [recipientFileText, setRecipientFileText] = useState('');
+  const [recipientFileError, setRecipientFileError] = useState<string | null>(null);
   const [delayMin, setDelayMin] = useState('3000');
   const [delayMax, setDelayMax] = useState('5000');
   const [creating, setCreating] = useState(false);
@@ -510,8 +515,47 @@ export default function BlastPage() {
     enabled: hasRunning && selected === null,
   });
 
-  const summary = useMemo(() => summarizeRecipients(recipients), [recipients]);
+  const summary = useMemo(
+    () =>
+      summarizeRecipients(
+        recipientMode === 'file' && recipientFileText ? recipientFileText : recipients,
+      ),
+    [recipients, recipientMode, recipientFileText],
+  );
   const vars = useMemo(() => detectVars(text), [text]);
+
+  /** Baca file .txt/.csv (maks 2 MB) → teks mentah untuk divalidasi. */
+  function handleRecipientFile(file: File | undefined): void {
+    setRecipientFileError(null);
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!/\.(txt|csv)$/.test(name) && file.type !== 'text/plain' && file.type !== 'text/csv') {
+      setRecipientFileError('Format file harus .txt atau .csv.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setRecipientFileError('File maksimal 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      if (!text.trim()) {
+        setRecipientFileError('File kosong — isi minimal 1 nomor.');
+        return;
+      }
+      setRecipientFileName(file.name);
+      setRecipientFileText(text);
+    };
+    reader.onerror = () => setRecipientFileError('Gagal membaca file. Coba lagi.');
+    reader.readAsText(file);
+  }
+
+  function clearRecipientFile(): void {
+    setRecipientFileName(null);
+    setRecipientFileText('');
+    setRecipientFileError(null);
+  }
 
   function canNextFromPesan(): boolean {
     if (!label.trim()) {
@@ -618,10 +662,12 @@ export default function BlastPage() {
     }
     setCreating(true);
     try {
+      const activeRecipients =
+        recipientMode === 'file' ? recipientFileText.trim() : recipients.trim();
       const r = await createBlast(sessionId, {
         label: label.trim(),
         text: text.trim() || undefined,
-        recipients: recipients.trim(),
+        recipients: activeRecipients,
         delayMin: min,
         delayMax: max,
         media,
@@ -636,6 +682,8 @@ export default function BlastPage() {
       setLabel('');
       setText('');
       setRecipients('');
+      setRecipientMode('ketik');
+      clearRecipientFile();
       setDelayMin('3000');
       setDelayMax('5000');
       setUseMedia(false);
@@ -1141,14 +1189,62 @@ export default function BlastPage() {
 
             {step === 'penerima' ? (
               <>
-                <TextArea
-                  label="Penerima (satu nomor per baris, koma, atau titik koma — format 62812…)"
-                  value={recipients}
-                  onChange={(e) => setRecipients(e.target.value)}
-                  rows={6}
-                  required
-                  placeholder={'628121111111\n628122222222, 628123333333'}
-                />
+                <Select
+                  label="Cara input nomor"
+                  value={recipientMode}
+                  onChange={(e) => setRecipientMode(e.target.value as 'ketik' | 'file')}
+                >
+                  <option value="ketik">Ketik / tempel nomor</option>
+                  <option value="file">Upload file (.txt / .csv)</option>
+                </Select>
+                {recipientMode === 'ketik' ? (
+                  <TextArea
+                    label="Penerima (satu nomor per baris, koma, atau titik koma — format 62812…)"
+                    value={recipients}
+                    onChange={(e) => setRecipients(e.target.value)}
+                    rows={6}
+                    required
+                    placeholder={'628121111111\n628122222222, 628123333333'}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <label
+                      htmlFor="recipient-file"
+                      className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-control border border-dashed border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-muted/40"
+                    >
+                      <Plus size={15} /> Pilih file .txt / .csv (maks 2 MB)
+                    </label>
+                    <input
+                      id="recipient-file"
+                      type="file"
+                      accept=".txt,.csv,text/plain,text/csv"
+                      className="sr-only"
+                      onChange={(e) => {
+                        handleRecipientFile(e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
+                    {recipientFileName ? (
+                      <p className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="min-w-0 flex-1 break-all font-mono text-[13px]">
+                          {recipientFileName}
+                        </span>
+                        <Button type="button" variant="secondary" size="sm" onClick={clearRecipientFile}>
+                          Hapus file
+                        </Button>
+                      </p>
+                    ) : null}
+                    {recipientFileError ? (
+                      <p role="alert" className="text-sm text-status-failed">
+                        {recipientFileError}
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Satu nomor per baris (koma/titik koma juga bisa). Sistem menghitung
+                      berapa yang valid, duplikat, dan tidak valid di bawah.
+                    </p>
+                  </div>
+                )}
                 <div className="tnum grid grid-cols-3 gap-2 text-center" aria-live="polite">
                   <div className="rounded-control bg-background px-1 py-2 sm:px-2">
                     <p className="font-display flex items-center justify-center gap-1 text-lg font-bold text-status-open sm:text-xl">
