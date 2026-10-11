@@ -524,7 +524,7 @@ export default function BlastPage() {
   );
   const vars = useMemo(() => detectVars(text), [text]);
 
-  /** Baca file .txt/.csv (maks 2 MB) → teks mentah untuk divalidasi. */
+  /** Baca file .txt/.csv (maks 10 MB ≈ 500 ribu nomor) → teks mentah untuk divalidasi. */
   function handleRecipientFile(file: File | undefined): void {
     setRecipientFileError(null);
     if (!file) return;
@@ -533,8 +533,8 @@ export default function BlastPage() {
       setRecipientFileError('Format file harus .txt atau .csv.');
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setRecipientFileError('File maksimal 2 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      setRecipientFileError('File maksimal 10 MB (≈ 500 ribu nomor).');
       return;
     }
     const reader = new FileReader();
@@ -1212,7 +1212,7 @@ export default function BlastPage() {
                       htmlFor="recipient-file"
                       className="flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-control border border-dashed border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-muted/40"
                     >
-                      <Plus size={15} /> Pilih file .txt / .csv (maks 2 MB)
+                      <Plus size={15} /> Pilih file .txt / .csv (maks 10 MB)
                     </label>
                     <input
                       id="recipient-file"
@@ -1262,8 +1262,10 @@ export default function BlastPage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Duplikat otomatis dihapus (kemunculan pertama yang dipakai). Maksimal 50.000
-                  penerima per campaign.
+                  Duplikat otomatis dihapus (kemunculan pertama yang dipakai). Maksimal
+                  500.000 penerima per campaign. Campaign besar butuh waktu lama (500 ms
+                  per nomor ≈ 14 jam per 100 ribu nomor) — risiko pembatasan WA
+                  ditanggung pengguna.
                 </p>
                 <div className="flex justify-between">
                   <Button type="button" variant="secondary" onClick={() => setStep('pesan')}>

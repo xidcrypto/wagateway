@@ -526,7 +526,7 @@ const SECTIONS: DocSection[] = [
         desc: 'Membuat campaign baru (langsung running). Teks boleh kosong bila ada media atau tombol. Variabel {{nama}} diisi dari data tiap penerima.',
         body: '{"label": "Promo", "text": "Halo {{nama}}!", "recipients": [{"phone": "62812xxxxxxx", "nama": "Budi"}], "delayMin": 3000, "delayMax": 5000}',
         resp: '{"blast": {"id": 1, "status": "running", "total": 1}}',
-        note: 'Maksimal 50.000 penerima per campaign. delayMin/delayMax = jeda antar nomor (ms), efektif minimal 500 ms. Tambahkan mediaJson (kind image/video/audio/document/sticker + media) dan buttonsJson (mode buttons/buttonv2/list) bila perlu.',
+        note: 'Maksimal 500.000 penerima per campaign (dibuat queued, lalu running setelah semua penerima tersimpan). delayMin/delayMax = jeda antar nomor (ms), efektif minimal 500 ms. Tambahkan mediaJson (kind image/video/audio/document/sticker + media) dan buttonsJson (mode buttons/buttonv2/list) bila perlu.',
       },
       {
         method: 'GET',

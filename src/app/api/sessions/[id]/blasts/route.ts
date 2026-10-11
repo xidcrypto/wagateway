@@ -82,7 +82,11 @@ async function ownerGuard(
 
 /**
  * Buat campaign blast (langsung berjalan, status `running`).
- * Penerima disimpan createMany per batch 1000 dalam $transaction bersama blast.
+ * Penerima disimpan createMany per batch 1000. Blast dibuat dulu dengan
+ * status `queued` agar insert ratusan ribu baris tidak menahan satu
+ * transaksi raksasa (rawan timeout); setelah semua batch masuk, status
+ * dibalik ke `running` lalu worker di-kick. Bila insert gagal di tengah,
+ * blast ditandai `failed` (tidak jalan setengah-setengah).
  */
 export const POST = withAuth(async (req: NextRequest, ctx, routeCtx?: RouteCtx) => {
   const auth = await authorizeSession(
@@ -198,34 +202,50 @@ export const POST = withAuth(async (req: NextRequest, ctx, routeCtx?: RouteCtx) 
   }
 
   try {
-    const blast = await prisma.$transaction(async (tx) => {
-      const created = await tx.blast.create({
-        data: {
-          sessionId: auth.session.id,
-          ownerId: auth.session.ownerId,
-          label: body.label.trim(),
-          textBody,
-          mediaJson: (mediaJson as never) ?? undefined,
-          buttonsJson: (buttonsJson as never) ?? undefined,
-          total: recipients.length,
-          delayMin: delay.minMs,
-          delayMax: delay.maxMs,
-          status: 'running',
-          startedAt: new Date(),
-        },
-        select: { id: true },
-      });
-      for (let i = 0; i < recipients.length; i += 1000) {
-        const batch = recipients.slice(i, i + 1000).map((r) => ({
+    const created = await prisma.blast.create({
+      data: {
+        sessionId: auth.session.id,
+        ownerId: auth.session.ownerId,
+        label: body.label.trim(),
+        textBody,
+        mediaJson: (mediaJson as never) ?? undefined,
+        buttonsJson: (buttonsJson as never) ?? undefined,
+        total: recipients.length,
+        delayMin: delay.minMs,
+        delayMax: delay.maxMs,
+        status: 'queued',
+      },
+      select: { id: true },
+    });
+    try {
+      const batchSize = 1000;
+      for (let i = 0; i < recipients.length; i += batchSize) {
+        const batch = recipients.slice(i, i + batchSize).map((r) => ({
           blastId: created.id,
           phone: r.phone,
           vars: r.vars as never,
           status: 'pending' as const,
         }));
-        await tx.blastRecipient.createMany({ data: batch });
+        await prisma.blastRecipient.createMany({ data: batch });
       }
-      return created;
-    });
+      await prisma.blast.update({
+        where: { id: created.id },
+        data: { status: 'running', startedAt: new Date() },
+      });
+    } catch (insertErr) {
+      await prisma.blast.update({
+        where: { id: created.id },
+        data: {
+          status: 'failed',
+          error:
+            insertErr instanceof Error
+              ? `Gagal menyimpan penerima: ${insertErr.message.slice(0, 500)}`
+              : 'Gagal menyimpan penerima.',
+        },
+      });
+      return fail('Gagal menyimpan penerima campaign. Coba pecah menjadi beberapa campaign lebih kecil.', 500);
+    }
+    const blast = { id: created.id };
 
     kickBlast(blast.id);
 

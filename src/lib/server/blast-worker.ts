@@ -446,6 +446,9 @@ async function runLoop(blastId: number): Promise<void> {
       select: { id: true, status: true, sessionId: true, textBody: true, mediaJson: true, buttonsJson: true, delayMin: true, delayMax: true },
     });
     if (!blast) return;
+    // `queued` = insert penerima masih berjalan di request pembuat (loop
+    // hanya di-kick setelah status dibalik ke `running`). Jangan sentuh.
+    if (blast.status === 'queued') return;
     if (blast.status === 'paused') return;
     if (blast.status === 'cancelled' || blast.status === 'done' || blast.status === 'failed') return;
 
@@ -550,9 +553,26 @@ export function isBlastRunning(blastId: number): boolean {
 
 /**
  * Resume saat boot: semua blast `running` dilanjutkan dari recipient `pending`.
- * Blast yang session-nya tidak open akan otomatis paused oleh loop.
+ * Blast `queued` tidak boleh lolos ke loop — tandanya insert penerima gagal
+ * di tengah (server restart saat create) → tandai `failed` agar tidak jalan
+ * setengah-setengah. Blast yang session-nya tidak open akan otomatis paused
+ * oleh loop.
  */
 export async function resumeRunningBlasts(): Promise<{ resumed: number }> {
+  try {
+    const staleQueued = await prisma.blast.updateMany({
+      where: { status: 'queued' },
+      data: {
+        status: 'failed',
+        error: 'Pembuatan campaign terputus (server restart saat menyimpan penerima). Buat ulang campaign.',
+      },
+    });
+    if (staleQueued.count > 0) {
+      console.log(`[blast-worker] ${staleQueued.count} campaign queued basi ditandai failed.`);
+    }
+  } catch {
+    // Bukan fatal; lanjut resume yang running.
+  }
   let rows: Array<{ id: number }> = [];
   try {
     rows = await prisma.blast.findMany({

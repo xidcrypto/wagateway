@@ -5,11 +5,11 @@ import 'server-only';
  * - `recipients` bisa: array string, array objek `{phone, ...vars}`,
  *   atau string dipisah koma/baris baru (atau campuran).
  * - Nomor dinormalisasi ke digit; yang tidak valid di-skip; duplikat dihapus.
- * - Maksimal 50.000 per campaign.
+ * - Maksimal 500.000 per campaign (risiko banned WA urusan user).
  * - Template `{{nama}}` dirender dari `vars` penerima (hilang → string kosong).
  */
 
-export const MAX_BLAST_RECIPIENTS = 50_000;
+export const MAX_BLAST_RECIPIENTS = 500_000;
 
 export type BlastRecipientInput = {
   phone: string;
@@ -111,7 +111,7 @@ export function parseBlastRecipients(input: unknown): {
 
   if (out.length >= MAX_BLAST_RECIPIENTS) {
     // Kelebihan di-skip diam-diam selain batas; dicatat lewat skipped bila masih ada sisa.
-    // (Tidak throw agar campaign besar tetap jalan untuk 50.000 pertama.)
+    // (Tidak throw agar campaign besar tetap jalan untuk 500.000 pertama.)
   }
   return { recipients: out, skipped };
 }

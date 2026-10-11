@@ -82,7 +82,7 @@ const FAQ = [
   },
   {
     q: 'Berapa nomor yang bisa ditautkan?',
-    a: 'Tidak ada batas bawaan — setiap nomor menjadi satu session. Blast mendukung sampai 50.000 penerima per campaign dengan jeda antar-nomor agar terlihat wajar.',
+    a: 'Tidak ada batas bawaan — setiap nomor menjadi satu session. Blast mendukung sampai 500.000 penerima per campaign dengan jeda antar-nomor agar terlihat wajar.',
   },
   {
     q: 'Harus bisa coding untuk memakai ini?',
