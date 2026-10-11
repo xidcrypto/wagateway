@@ -132,7 +132,7 @@ function TicketsContent() {
     if (!selectedId) return;
     let cancelled = false;
     async function fetchDetail(): Promise<void> {
-      setDetail(null);
+      // Detail lama dipertahankan (tanpa setDetail(null)): cegah ErrorState kedip.
       setDetailLoading(true);
       setDetailError(null);
       setPeerTyping(false);
@@ -144,7 +144,14 @@ function TicketsContent() {
           prev.map((t) => (t.id === r.ticket.id ? { ...t, hasUnread: false } : t)),
         );
       } catch (e) {
-        if (!cancelled) setDetailError(errMsg(e, 'Gagal memuat tiket.'));
+        if (cancelled) return;
+        const msg = errMsg(e, 'Gagal memuat tiket.');
+        setDetailError(msg);
+        // Bila thread lama masih tampil, beri tahu via toast (bukan ErrorState).
+        setDetail((prev) => {
+          if (prev) toast('error', msg);
+          return prev;
+        });
       } finally {
         if (!cancelled) setDetailLoading(false);
       }
@@ -234,7 +241,9 @@ function TicketsContent() {
   }
 
   function backToList(): void {
-    setDetail(null);
+    // Jangan nol-kan detail di sini: selectedId masih ada sampai URL berubah,
+    // dan detail=null + selectedId ada = ErrorState merah kedip ~1 dtk.
+    // Cukup pindah URL; thread lama tetap tampil sampai daftar muncul.
     setDetailError(null);
     setPeerTyping(false);
     router.push('/admin/tickets');
@@ -439,13 +448,13 @@ function TicketsContent() {
               Pilih tiket di kiri untuk membaca dan membalas.
             </p>
           </Card>
-        ) : detailLoading ? (
+        ) : detailLoading && !detail ? (
           <div className="flex flex-col gap-2" aria-label="Memuat percakapan">
             <Skeleton className="h-8 w-2/3" />
             <Skeleton className="h-16" />
             <Skeleton className="h-16" />
           </div>
-        ) : detailError || !detail ? (
+        ) : (detailError && !detail) || !detail ? (
           <ErrorState
             message="Gagal memuat tiket."
             hint={detailError ?? undefined}
